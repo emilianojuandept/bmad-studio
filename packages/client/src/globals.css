@@ -1,0 +1,184 @@
+@import 'tailwindcss';
+@import '@fontsource/inter-tight/400.css';
+@import '@fontsource/inter-tight/700.css';
+@import '@fontsource/inter-tight/800.css';
+
+/* Geist Mono loaded via CSS from node_modules — the geist package exports
+   are JS-only, so we reference the file through a resolved path.
+   Vite handles node_modules resolution for @import but not url().
+   Use system monospace as primary fallback. */
+
+/* Light mode (default) */
+:root {
+  --color-accent: #ff4a00;
+  --color-accent-hover: #e04300;
+  --color-yellow: #ccff00;
+  --color-bg: #ffffff;
+  --color-surface-raised: #f5f5f5;
+  --color-text: #000000;
+  --color-muted: #71717a;
+  --color-border-subtle: #e4e4e7;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-neutral: #a1a1aa;
+
+  --font-sans: 'Inter Tight', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* Dark mode */
+.dark {
+  --color-bg: #000000;
+  --color-surface-raised: #1a1a1a;
+  --color-text: #ffffff;
+  --color-muted: #a1a1aa;
+  --color-border-subtle: #27272a;
+  --color-accent-hover: #ff6a33;
+}
+
+@theme {
+  --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-bg: var(--color-bg);
+  --color-surface: var(--color-surface-raised);
+  --color-text: var(--color-text);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border-subtle);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+/* Spacing scale (8px grid) */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-10: 40px;
+  --space-11: 44px;
+  --space-12: 48px;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Button utilities */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 6px;
+  background-color: var(--color-accent);
+  color: white;
+  transition: background-color 150ms;
+  min-height: 36px;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  background-color: var(--color-accent-hover);
+}
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  transition: background-color 150ms;
+  min-height: 36px;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  background-color: var(--color-surface-raised);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 6px;
+  color: var(--color-muted);
+  transition: color 150ms, background-color 150ms;
+  min-height: 36px;
+  cursor: pointer;
+}
+.btn-ghost:hover {
+  color: var(--color-text);
+  background-color: var(--color-surface-raised);
+}
+
+/* Prose overrides for dark mode markdown rendering */
+.dark .prose {
+  --tw-prose-body: var(--color-text);
+  --tw-prose-headings: var(--color-text);
+  --tw-prose-links: var(--color-accent);
+  --tw-prose-bold: var(--color-text);
+  --tw-prose-counters: var(--color-muted);
+  --tw-prose-bullets: var(--color-muted);
+  --tw-prose-hr: var(--color-border-subtle);
+  --tw-prose-quotes: var(--color-muted);
+  --tw-prose-quote-borders: var(--color-accent);
+  --tw-prose-code: var(--color-text);
+  --tw-prose-pre-code: var(--color-text);
+  --tw-prose-pre-bg: var(--color-surface-raised);
+  --tw-prose-th-borders: var(--color-border-subtle);
+  --tw-prose-td-borders: var(--color-border-subtle);
+}
+
+/* Slide-over overlay panel */
+.slide-over-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: flex-end;
+}
+.slide-over-backdrop .slide-over-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+.slide-over-backdrop .slide-over-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-border-subtle);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

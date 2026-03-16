@@ -1,0 +1,56 @@
+{
+  "name": "bmad-studio",
+  "version": "0.1.0",
+  "description": "Browser-based admin interface for BMAD agentic engineering framework — visualize, configure, and manage your BMAD project",
+  "type": "module",
+  "workspaces": [
+    "packages/shared",
+    "packages/server",
+    "packages/client"
+  ],
+  "bin": {
+    "bmad-studio": "./bin/bmad-studio.mjs"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w @bmad-studio/server\" \"npm run dev -w @bmad-studio/client\"",
+    "build": "npm run build -w @bmad-studio/shared && npm run build -w @bmad-studio/client && npm run build -w @bmad-studio/server",
+    "start": "node packages/server/dist/index.js",
+    "test": "vitest run",
+    "lint": "eslint packages/*/src/",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.25.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.25.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "prettier": "^3.5.3",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.31.0",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jwhiteside/bmad-studio.git"
+  },
+  "homepage": "https://github.com/jwhiteside/bmad-studio#readme",
+  "bugs": {
+    "url": "https://github.com/jwhiteside/bmad-studio/issues"
+  },
+  "keywords": [
+    "bmad",
+    "ai-agents",
+    "agentic-engineering",
+    "workflow",
+    "admin",
+    "studio",
+    "configuration",
+    "visualization"
+  ],
+  "author": "Jonathan Whiteside",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

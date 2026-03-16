@@ -1,0 +1,195 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
+import type { Agent, Skill, Workflow, Package, Team } from '@bmad-studio/shared'
+
+import type { ParseResult, ParsedConfig } from './config-parser.js'
+import { parseConfig } from './config-parser.js'
+import { parseAgent } from './agent-parser.js'
+import { parseSkill } from './skill-parser.js'
+import { parseWorkflow } from './workflow-parser.js'
+import { parsePackage } from './package-parser.js'
+import { parseIdeConfig } from './ide-config-parser.js'
+import { parseTeam } from './team-parser.js'
+import { parseCsv } from './csv-parser.js'
+import type { IdeConfig } from './ide-config-parser.js'
+import type { CsvRow } from './csv-parser.js'
+
+export type EntityIndex = {
+  agents: Agent[]
+  skills: Skill[]
+  workflows: Workflow[]
+  teams: Team[]
+  configs: ParsedConfig[]
+  packages: Package[]
+  ideConfigs: IdeConfig[]
+  manifests: CsvRow[][]
+  errors: Array<{ error: string; filePath: string }>
+}
+
+function readFilesSafe(dir: string, ext: string): Array<{ path: string; content: string }> {
+  const results: Array<{ path: string; content: string }> = []
+  if (!fs.existsSync(dir)) return results
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isFile() && entry.name.endsWith(ext)) {
+      results.push({ path: fullPath, content: fs.readFileSync(fullPath, 'utf-8') })
+    }
+  }
+  return results
+}
+
+function scanRecursive(
+  dir: string,
+  predicate: (name: string, isDir: boolean) => boolean,
+): string[] {
+  const results: string[] = []
+  if (!fs.existsSync(dir)) return results
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    if (predicate(entry.name, entry.isDirectory())) {
+      results.push(fullPath)
+    }
+    if (entry.isDirectory() && !entry.name.startsWith('.')) {
+      results.push(...scanRecursive(fullPath, predicate))
+    }
+  }
+  return results
+}
+
+function collectResult<T>(result: ParseResult<T>, successes: T[], errors: EntityIndex['errors']) {
+  if (result.ok) {
+    successes.push(result.data)
+  } else {
+    errors.push({ error: result.error, filePath: result.filePath })
+  }
+}
+
+export function buildIndex(projectRoot: string): EntityIndex {
+  const bmadDir = path.join(projectRoot, '_bmad')
+  const index: EntityIndex = {
+    agents: [],
+    skills: [],
+    workflows: [],
+    teams: [],
+    configs: [],
+    packages: [],
+    ideConfigs: [],
+    manifests: [],
+    errors: [],
+  }
+
+  if (!fs.existsSync(bmadDir)) {
+    return index
+  }
+
+  // Parse configs from each module
+  const configFiles = scanRecursive(bmadDir, (name) => name === 'config.yaml')
+  for (const configPath of configFiles) {
+    const content = fs.readFileSync(configPath, 'utf-8')
+    collectResult(parseConfig(configPath, content, projectRoot), index.configs, index.errors)
+  }
+
+  // Parse agent files (*.md in agents/ directories)
+  const agentFiles = scanRecursive(bmadDir, (name, isDir) => !isDir && name.endsWith('.md')).filter(
+    (f) => f.includes('/agents/') && !f.includes('bmad-skill-manifest'),
+  )
+  for (const agentPath of agentFiles) {
+    const content = fs.readFileSync(agentPath, 'utf-8')
+    const result = parseAgent(agentPath, content)
+    if (result.ok) {
+      // Derive module from path
+      const relPath = path.relative(bmadDir, agentPath)
+      const moduleName = relPath.split(path.sep)[0]
+      if (moduleName !== '_config') {
+        result.data.module = moduleName
+      }
+    }
+    collectResult(result, index.agents, index.errors)
+  }
+
+  // Parse skill files (SKILL.md)
+  const skillFiles = scanRecursive(bmadDir, (name) => name === 'SKILL.md')
+  for (const skillPath of skillFiles) {
+    const content = fs.readFileSync(skillPath, 'utf-8')
+    const result = parseSkill(skillPath, content)
+    if (result.ok) {
+      const relPath = path.relative(bmadDir, skillPath)
+      const moduleName = relPath.split(path.sep)[0]
+      if (moduleName !== '_config') {
+        result.data.module = moduleName
+      }
+    }
+    collectResult(result, index.skills, index.errors)
+  }
+
+  // Parse workflows (directories containing workflow.md or bmad-manifest.json)
+  const workflowEntryFiles = scanRecursive(
+    bmadDir,
+    (name) => name === 'workflow.md' || name === 'bmad-manifest.json',
+  )
+  // Deduplicate by directory (a dir may have both workflow.md and bmad-manifest.json)
+  const workflowDirs = new Set<string>()
+  for (const entryPath of workflowEntryFiles) {
+    workflowDirs.add(path.dirname(entryPath))
+  }
+  for (const wfDir of workflowDirs) {
+    const result = parseWorkflow(wfDir)
+    if (result.ok) {
+      const relPath = path.relative(bmadDir, wfDir)
+      const moduleName = relPath.split(path.sep)[0]
+      if (moduleName !== '_config') {
+        result.data.module = moduleName
+      }
+    }
+    collectResult(result, index.workflows, index.errors)
+  }
+
+  // Parse team files (*.yaml in teams/ directories)
+  const teamFiles = scanRecursive(
+    bmadDir,
+    (name, isDir) => !isDir && name.endsWith('.yaml'),
+  ).filter((f) => f.includes('/teams/') && !f.includes('manifest'))
+  for (const teamPath of teamFiles) {
+    const result = parseTeam(teamPath)
+    if (result.ok) {
+      const relPath = path.relative(bmadDir, teamPath)
+      const moduleName = relPath.split(path.sep)[0]
+      if (moduleName !== '_config') {
+        result.data.module = moduleName
+      }
+    }
+    collectResult(result, index.teams, index.errors)
+  }
+
+  // Parse package files
+  const packageFiles = scanRecursive(bmadDir, (name) => name === 'package.yaml')
+  for (const pkgPath of packageFiles) {
+    const content = fs.readFileSync(pkgPath, 'utf-8')
+    collectResult(parsePackage(pkgPath, content), index.packages, index.errors)
+  }
+
+  // Parse IDE configs
+  const ideDir = path.join(bmadDir, '_config', 'ides')
+  const ideFiles = readFilesSafe(ideDir, '.yaml')
+  for (const file of ideFiles) {
+    collectResult(parseIdeConfig(file.path, file.content), index.ideConfigs, index.errors)
+  }
+
+  // Parse CSV manifests
+  const csvFiles = readFilesSafe(path.join(bmadDir, '_config'), '.csv')
+  for (const file of csvFiles) {
+    const result = parseCsv(file.path, file.content)
+    if (result.ok) {
+      index.manifests.push(result.data)
+    } else {
+      index.errors.push({ error: result.error, filePath: result.filePath })
+    }
+  }
+
+  return index
+}

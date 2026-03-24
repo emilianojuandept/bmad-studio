@@ -1,6 +1,6 @@
 {
   "name": "bmad-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser-based admin interface for BMAD agentic engineering framework — visualize, configure, and manage your BMAD project",
   "type": "module",
   "workspaces": [
@@ -16,11 +16,14 @@
     "build": "npm run build -w @bmad-studio/shared && npm run build -w @bmad-studio/client && npm run build -w @bmad-studio/server",
     "start": "node packages/server/dist/index.js",
     "test": "vitest run",
+    "test:visual": "npx playwright test",
+    "test:visual:update": "npx playwright test --update-snapshots",
     "lint": "eslint packages/*/src/",
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx}\""
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@playwright/test": "^1.58.2",
     "concurrently": "^9.1.2",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^7.0.1",

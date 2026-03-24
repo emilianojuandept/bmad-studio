@@ -69,6 +69,17 @@ npx vitest run --watch      # Watch mode
 npx vitest run packages/server  # Server tests only
 ```
 
+### Visual Regression Tests
+
+Playwright captures screenshots of every page and compares them against committed baselines. Run before major releases, not on every commit.
+
+```bash
+npm run test:visual           # Compare current UI against baselines
+npm run test:visual:update    # Regenerate baselines after intentional UI changes
+```
+
+Uses Chromium only for consistent results. The dev server starts automatically. Baseline screenshots live in `e2e/` and are committed to the repo.
+
 ## Submitting Pull Requests
 
 1. **Fork** the repository and create a branch from `main`

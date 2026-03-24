@@ -4,6 +4,12 @@ Browser-based admin interface for the [BMAD](https://github.com/bmadcode/BMAD-ME
 
 BMAD Studio is the **configuration and visibility layer** for BMAD projects. It reads and writes BMAD's existing markdown and YAML files directly — no database, no hidden state. The IDE remains the execution environment; Studio helps you understand and manage the setup.
 
+## Screenshots
+
+![Overview Dashboard](e2e/visual-regression.spec.ts-snapshots/overview-chromium-darwin.png)
+
+![Agents Page](e2e/visual-regression.spec.ts-snapshots/agents-chromium-darwin.png)
+
 ## Features
 
 - **Overview Dashboard** — See your entire BMAD project at a glance: agents, teams, workflows, skills, data sources

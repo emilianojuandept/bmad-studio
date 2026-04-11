@@ -13,11 +13,17 @@ export type ProjectConfig = {
   modules: Record<string, ModuleConfig>
 }
 
+export type RegistryConfig = {
+  repo: string
+  branch: string
+}
+
 export type StudioSettings = {
   port: number
   theme: 'dark' | 'light'
   customSettings?: Record<string, unknown>
   appTitle?: string
+  registry?: RegistryConfig
 }
 
 export type ProjectStatus = {

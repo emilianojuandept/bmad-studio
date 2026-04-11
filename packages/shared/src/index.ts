@@ -25,6 +25,7 @@ export type {
   ModuleConfig,
   ProjectConfig,
   StudioSettings,
+  RegistryConfig,
   ProjectStatus,
   AppInfo,
 } from './config.js'
@@ -47,3 +48,4 @@ export type {
   WebSocketEvent,
 } from './events.js'
 export type { Severity, ErrorCode, ApiError } from './errors.js'
+export type { RegistryStatus, RegistryModuleEntry, RegistryIndex } from './registry.js'

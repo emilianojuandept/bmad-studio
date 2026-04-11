@@ -15,14 +15,19 @@ type PreviewResponse = {
 type InstallModuleDialogProps = {
   onClose: () => void
   onInstalled: () => void
+  initialSource?: {
+    type: 'github'
+    value: string
+    prefetchedModuleYaml?: ModuleYaml | null
+  }
 }
 
-export function InstallModuleDialog({ onClose, onInstalled }: InstallModuleDialogProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('npm')
+export function InstallModuleDialog({ onClose, onInstalled, initialSource }: InstallModuleDialogProps) {
+  const [activeTab, setActiveTab] = useState<Tab>(initialSource?.type ?? 'npm')
 
   // Per-tab input state — each tab keeps its own value when switching
   const [npmValue, setNpmValue] = useState('')
-  const [githubValue, setGithubValue] = useState('')
+  const [githubValue, setGithubValue] = useState(initialSource?.type === 'github' ? initialSource.value : '')
   const [localValue, setLocalValue] = useState('')
   const [zipFile, setZipFile] = useState<File | null>(null)
 
@@ -40,8 +45,30 @@ export function InstallModuleDialog({ onClose, onInstalled }: InstallModuleDialo
     setVariables({})
   }, [activeTab])
 
-  const handleFetch = async () => {
-    const value = activeTab === 'github' ? githubValue : localValue
+  // On mount: if initialSource has prefetchedModuleYaml, skip the Fetch step.
+  // If not, auto-trigger fetch.
+  useEffect(() => {
+    if (!initialSource) return
+    if (initialSource.prefetchedModuleYaml) {
+      const moduleYaml = initialSource.prefetchedModuleYaml
+      // Build a synthetic preview without hitting the network
+      const agentCount = 0
+      const workflowCount = 0
+      const taskCount = 0
+      setPreview({ ok: true, moduleYaml, counts: { agents: agentCount, workflows: workflowCount, tasks: taskCount }, willReplace: false })
+      const seeded: Record<string, string> = {}
+      for (const [key, def] of Object.entries(moduleYaml.variables ?? {})) {
+        seeded[key] = def.default ?? ''
+      }
+      setVariables(seeded)
+    } else {
+      // Auto-trigger the Fetch step
+      void handleFetchWithValue(initialSource.value)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleFetchWithValue = async (value: string) => {
     if (!value.trim()) return
     setFetching(true)
     setError(null)
@@ -64,7 +91,6 @@ export function InstallModuleDialog({ onClose, onInstalled }: InstallModuleDialo
       }
       const p = data as PreviewResponse
       setPreview(p)
-      // Seed variables form with defaults
       const seeded: Record<string, string> = {}
       for (const [key, def] of Object.entries(p.moduleYaml.variables ?? {})) {
         seeded[key] = def.default ?? ''
@@ -75,6 +101,11 @@ export function InstallModuleDialog({ onClose, onInstalled }: InstallModuleDialo
     } finally {
       setFetching(false)
     }
+  }
+
+  const handleFetch = async () => {
+    const value = activeTab === 'github' ? githubValue : localValue
+    return handleFetchWithValue(value)
   }
 
   const handleInstall = async () => {

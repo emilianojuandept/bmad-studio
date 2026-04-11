@@ -8,6 +8,11 @@ import yaml from 'js-yaml'
 
 import { ValidationError, ConflictError, NotFoundError } from '../core/errors.js'
 import {
+  fetchAndCacheRegistryIndex,
+  isRegistryCacheStale,
+  readCachedRegistryIndex,
+} from '../core/module-registry.js'
+import {
   generateIdeSkillsForModule,
   removeIdeSkillsForModule,
   scanEntities,
@@ -1541,5 +1546,73 @@ export async function modulesPlugin(app: FastifyInstance) {
         `Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
       )
     }
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Story 16.2 — Registry index endpoints
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  app.get('/api/registry', async (_request, reply) => {
+    if (!('fileStore' in app)) {
+      return reply.send({ ok: false, configured: false, error: 'No project detected' })
+    }
+    const settingsPath = path.join(app.fileStore.studioDir, 'settings.json')
+    if (!fs.existsSync(settingsPath)) {
+      return reply.send({ ok: false, configured: false, error: 'No registry configured' })
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      registry?: { repo: string; branch: string }
+    }
+    if (!settings.registry?.repo) {
+      return reply.send({ ok: false, configured: false, error: 'No registry configured' })
+    }
+
+    let ghSource
+    try {
+      ghSource = parseGithubSource(settings.registry.repo)
+    } catch (err) {
+      throw new ValidationError(err instanceof Error ? err.message : String(err))
+    }
+    let cached = readCachedRegistryIndex(app.fileStore.studioDir, ghSource.owner, ghSource.repo)
+    if (!cached || isRegistryCacheStale(cached)) {
+      try {
+        cached = await fetchAndCacheRegistryIndex(
+          app.fileStore.studioDir,
+          settings.registry.repo,
+          settings.registry.branch ?? 'main',
+        )
+      } catch (err) {
+        throw new ValidationError(err instanceof Error ? err.message : String(err))
+      }
+    }
+    return reply.send({ ok: true, configured: true, index: cached })
+  })
+
+  app.post('/api/registry/refresh', async (_request, reply) => {
+    if (!('fileStore' in app)) {
+      throw new ValidationError('No project detected')
+    }
+    const settingsPath = path.join(app.fileStore.studioDir, 'settings.json')
+    if (!fs.existsSync(settingsPath)) {
+      throw new ValidationError('No registry configured')
+    }
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      registry?: { repo: string; branch: string }
+    }
+    if (!settings.registry?.repo) {
+      throw new ValidationError('No registry configured')
+    }
+
+    let index
+    try {
+      index = await fetchAndCacheRegistryIndex(
+        app.fileStore.studioDir,
+        settings.registry.repo,
+        settings.registry.branch ?? 'main',
+      )
+    } catch (err) {
+      throw new ValidationError(err instanceof Error ? err.message : String(err))
+    }
+    return reply.send({ ok: true, index })
   })
 }

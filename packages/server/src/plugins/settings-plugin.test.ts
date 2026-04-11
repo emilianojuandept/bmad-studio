@@ -138,6 +138,26 @@ describe('settings-plugin', () => {
     await app.close()
   })
 
+  it('PUT /api/settings preserves the registry block', async () => {
+    const app = await createApp({ logger: false, serveStatic: false, project: makeProject(tmpDir) })
+
+    // Write registry config
+    const putResp = await app.inject({
+      method: 'PUT',
+      url: '/api/settings',
+      payload: { registry: { repo: 'foo/bar', branch: 'main' } },
+    })
+    expect(putResp.statusCode).toBe(200)
+    expect(JSON.parse(putResp.body).ok).toBe(true)
+
+    // Read back and assert round-trip
+    const getResp = await app.inject({ method: 'GET', url: '/api/settings' })
+    expect(getResp.statusCode).toBe(200)
+    const settings = JSON.parse(getResp.body)
+    expect(settings.registry).toEqual({ repo: 'foo/bar', branch: 'main' })
+    await app.close()
+  })
+
   it('GET /api/settings returns defaults without file store', async () => {
     const app = await createApp({ logger: false, serveStatic: false, project: null })
     const resp = await app.inject({ method: 'GET', url: '/api/settings' })

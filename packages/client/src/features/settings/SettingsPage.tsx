@@ -7,6 +7,7 @@ import { useNotifications } from '../../layout/NotificationProvider.js'
 type Settings = {
   port: number
   theme: 'dark' | 'light'
+  registry?: { repo: string; branch: string }
 }
 
 export function SettingsPage() {
@@ -18,6 +19,9 @@ export function SettingsPage() {
   const [port, setPort] = useState('4040')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [registryRepo, setRegistryRepo] = useState('')
+  const [registryBranch, setRegistryBranch] = useState('main')
+  const [savingRegistry, setSavingRegistry] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -26,6 +30,10 @@ export function SettingsPage() {
         const data = d as Settings
         setSettings(data)
         setPort(String(data.port ?? 4040))
+        if (data.registry) {
+          setRegistryRepo(data.registry.repo ?? '')
+          setRegistryBranch(data.registry.branch ?? 'main')
+        }
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -68,6 +76,28 @@ export function SettingsPage() {
       notify('error', 'Failed to save settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSaveRegistry() {
+    setSavingRegistry(true)
+    try {
+      const resp = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          registry: { repo: registryRepo.trim(), branch: registryBranch.trim() || 'main' },
+        }),
+      })
+      if (resp.ok) {
+        notify('success', 'Registry settings saved')
+      } else {
+        notify('error', 'Failed to save registry settings')
+      }
+    } catch {
+      notify('error', 'Failed to save registry settings')
+    } finally {
+      setSavingRegistry(false)
     }
   }
 
@@ -124,6 +154,50 @@ export function SettingsPage() {
               max={65535}
               className="w-24 px-3 py-1.5 text-sm text-right rounded-md bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-text)] font-[var(--font-mono)] outline-none focus:border-[var(--color-accent)]"
             />
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-bold mb-4">Module Registry</h2>
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-muted)] px-4">
+            Configure a GitHub repo as your team's module registry. Browse and install shared modules from the Registry tab on the Modules page.
+          </p>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--color-surface-raised)]">
+            <div>
+              <p className="text-sm font-bold">Repository</p>
+              <p className="text-xs text-[var(--color-muted)]">GitHub repo in owner/repo format</p>
+            </div>
+            <input
+              type="text"
+              value={registryRepo}
+              onChange={(e) => setRegistryRepo(e.target.value)}
+              placeholder="owner/repo"
+              className="w-56 px-3 py-1.5 text-sm rounded-md bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-text)] font-[var(--font-mono)] outline-none focus:border-[var(--color-accent)]"
+            />
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--color-surface-raised)]">
+            <div>
+              <p className="text-sm font-bold">Branch</p>
+              <p className="text-xs text-[var(--color-muted)]">Default: main</p>
+            </div>
+            <input
+              type="text"
+              value={registryBranch}
+              onChange={(e) => setRegistryBranch(e.target.value)}
+              placeholder="main"
+              className="w-32 px-3 py-1.5 text-sm rounded-md bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-text)] font-[var(--font-mono)] outline-none focus:border-[var(--color-accent)]"
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveRegistry}
+              disabled={!registryRepo.trim() || savingRegistry}
+              className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {savingRegistry ? 'Saving...' : 'Save'}
+            </button>
           </div>
         </div>
       </section>

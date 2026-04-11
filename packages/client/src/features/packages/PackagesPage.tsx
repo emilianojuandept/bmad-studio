@@ -11,6 +11,7 @@ import { EmptyState } from '../../shared/EmptyState.js'
 import { EditModuleDialog } from './EditModuleDialog.js'
 import { ExportPackageDialog } from './ExportPackageDialog.js'
 import { InstallModuleDialog } from './InstallModuleDialog.js'
+import { RegistryBrowsePanel } from './RegistryBrowsePanel.js'
 import { RemoveModuleDialog } from './RemoveModuleDialog.js'
 import { useDetailParam } from '../../hooks/use-detail-param.js'
 import { useNotifications } from '../../layout/NotificationProvider.js'
@@ -427,6 +428,9 @@ export function ModulesPage() {
   const [selectedModule, setSelectedModule] = useDetailParam('detail')
   const [showCreate, setShowCreate] = useState(false)
   const [showInstall, setShowInstall] = useState(false)
+  const [installSource, setInstallSource] = useState<{ type: 'github'; value: string; prefetchedModuleYaml?: import('@bmad-studio/shared').ModuleYaml | null } | undefined>()
+  const [tab, setTab] = useDetailParam('tab')
+  const activeTab = (tab === 'registry' ? 'registry' : 'installed') as 'installed' | 'registry'
   const [showExport, setShowExport] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<ModuleInfo | null>(null)
   const [showEdit, setShowEdit] = useState<string | null>(null)
@@ -653,7 +657,40 @@ export function ModulesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex border-b border-[var(--color-border-subtle)] mb-4">
+          <button
+            onClick={() => setTab('installed')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'installed'
+                ? 'border-b-2 border-[var(--color-accent)] text-[var(--color-text)]'
+                : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            Installed
+          </button>
+          <button
+            onClick={() => setTab('registry')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'registry'
+                ? 'border-b-2 border-[var(--color-accent)] text-[var(--color-text)]'
+                : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            Registry
+          </button>
+        </div>
+
+        {activeTab === 'registry' && (
+          <RegistryBrowsePanel
+            installedModules={modules}
+            onInstall={(source) => {
+              setInstallSource(source)
+              setShowInstall(true)
+            }}
+          />
+        )}
+
+        {activeTab === 'installed' && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {modules.map((mod) => (
             <button
               key={mod.name}
@@ -688,7 +725,7 @@ export function ModulesPage() {
               </div>
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
       {selected && (
@@ -963,11 +1000,13 @@ export function ModulesPage() {
 
       {showInstall && (
         <InstallModuleDialog
-          onClose={() => setShowInstall(false)}
+          onClose={() => { setShowInstall(false); setInstallSource(undefined) }}
           onInstalled={() => {
             setShowInstall(false)
+            setInstallSource(undefined)
             loadModules()
           }}
+          initialSource={installSource}
         />
       )}
 

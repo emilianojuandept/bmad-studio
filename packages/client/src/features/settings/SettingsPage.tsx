@@ -8,6 +8,7 @@ type Settings = {
   port: number
   theme: 'dark' | 'light'
   registry?: { repo: string; branch: string }
+  logging?: { enabled: boolean; level?: string }
 }
 
 export function SettingsPage() {
@@ -22,6 +23,9 @@ export function SettingsPage() {
   const [registryRepo, setRegistryRepo] = useState('')
   const [registryBranch, setRegistryBranch] = useState('main')
   const [savingRegistry, setSavingRegistry] = useState(false)
+  const [loggingEnabled, setLoggingEnabled] = useState(false)
+  const [loggingLevel, setLoggingLevel] = useState('info')
+  const [savingLogging, setSavingLogging] = useState(false)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -33,6 +37,10 @@ export function SettingsPage() {
         if (data.registry) {
           setRegistryRepo(data.registry.repo ?? '')
           setRegistryBranch(data.registry.branch ?? 'main')
+        }
+        if (data.logging) {
+          setLoggingEnabled(data.logging.enabled ?? false)
+          setLoggingLevel(data.logging.level ?? 'info')
         }
         setLoading(false)
       })
@@ -98,6 +106,28 @@ export function SettingsPage() {
       notify('error', 'Failed to save registry settings')
     } finally {
       setSavingRegistry(false)
+    }
+  }
+
+  async function handleSaveLogging() {
+    setSavingLogging(true)
+    try {
+      const resp = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logging: { enabled: loggingEnabled, level: loggingLevel },
+        }),
+      })
+      if (resp.ok) {
+        notify('success', 'Logging settings saved — restart the server to apply')
+      } else {
+        notify('error', 'Failed to save logging settings')
+      }
+    } catch {
+      notify('error', 'Failed to save logging settings')
+    } finally {
+      setSavingLogging(false)
     }
   }
 
@@ -197,6 +227,62 @@ export function SettingsPage() {
               className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {savingRegistry ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-bold mb-4">Logging</h2>
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--color-muted)] px-4">
+            Write server logs to <code className="font-[var(--font-mono)]">.bmad-studio/logs/studio.log</code> in your project. Useful for debugging install failures and module errors. Changes take effect after restarting the server.
+          </p>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--color-surface-raised)]">
+            <div>
+              <p className="text-sm font-bold">Enable file logging</p>
+              <p className="text-xs text-[var(--color-muted)]">Append all server logs to the log file</p>
+            </div>
+            <button
+              onClick={() => setLoggingEnabled(!loggingEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                loggingEnabled ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-border-subtle)]'
+              }`}
+              role="switch"
+              aria-checked={loggingEnabled}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  loggingEnabled ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="flex items-center justify-between p-4 rounded-lg bg-[var(--color-surface-raised)]">
+            <div>
+              <p className="text-sm font-bold">Log level</p>
+              <p className="text-xs text-[var(--color-muted)]">Minimum severity to log</p>
+            </div>
+            <select
+              value={loggingLevel}
+              onChange={(e) => setLoggingLevel(e.target.value)}
+              disabled={!loggingEnabled}
+              className="px-3 py-1.5 text-sm rounded-md bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="trace">trace (very verbose)</option>
+              <option value="debug">debug</option>
+              <option value="info">info (recommended)</option>
+              <option value="warn">warn</option>
+              <option value="error">error only</option>
+            </select>
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveLogging}
+              disabled={savingLogging}
+              className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {savingLogging ? 'Saving...' : 'Save'}
             </button>
           </div>
         </div>

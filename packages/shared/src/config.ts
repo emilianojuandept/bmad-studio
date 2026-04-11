@@ -18,12 +18,20 @@ export type RegistryConfig = {
   branch: string
 }
 
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error'
+
+export type LoggingConfig = {
+  enabled: boolean
+  level?: LogLevel
+}
+
 export type StudioSettings = {
   port: number
   theme: 'dark' | 'light'
   customSettings?: Record<string, unknown>
   appTitle?: string
   registry?: RegistryConfig
+  logging?: LoggingConfig
 }
 
 export type ProjectStatus = {

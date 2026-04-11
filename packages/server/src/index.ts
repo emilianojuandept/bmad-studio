@@ -1,10 +1,60 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
+import type { StudioSettings } from '@bmad-studio/shared'
 import { createApp } from './app.js'
 import { detectProject } from './core/project-detector.js'
 
 const DEFAULT_PORT = 4040
 const MAX_PORT_RETRIES = 10
+
+/**
+ * Read the settings file from the studio directory.
+ * Returns null if the file doesn't exist or can't be parsed.
+ */
+function readSettingsFile(studioDir: string | null): StudioSettings | null {
+  if (!studioDir) return null
+  const settingsPath = path.join(studioDir, 'settings.json')
+  if (!fs.existsSync(settingsPath)) return null
+  try {
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as StudioSettings
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Build Fastify logger options. When file logging is enabled in settings,
+ * configures pino to write to both stdout and .bmad-studio/logs/studio.log.
+ */
+function buildLoggerOptions(
+  settings: StudioSettings | null,
+  studioDir: string | null,
+  verbose: boolean,
+) {
+  const fileLogging = settings?.logging?.enabled && studioDir
+  const level = verbose ? 'debug' : (settings?.logging?.level ?? 'info')
+
+  if (!fileLogging) {
+    // Default: stdout only (Fastify default behaviour)
+    return verbose ? { level: 'debug' } : true
+  }
+
+  const logsDir = path.join(studioDir!, 'logs')
+  const logFile = path.join(logsDir, 'studio.log')
+
+  console.log(`File logging enabled — writing to ${logFile}`)
+
+  return {
+    level,
+    transport: {
+      targets: [
+        { target: 'pino/file', level, options: { destination: 1 } }, // stdout (fd 1)
+        { target: 'pino/file', level, options: { destination: logFile, mkdir: true } },
+      ],
+    },
+  }
+}
 
 function parseArgs(args: string[]) {
   let port = DEFAULT_PORT
@@ -65,8 +115,12 @@ async function main() {
     console.warn('Starting in setup mode...')
   }
 
+  const studioDir = project ? path.join(project.projectRoot, '.bmad-studio') : null
+  const settings = readSettingsFile(studioDir)
+  const loggerOptions = buildLoggerOptions(settings, studioDir, verbose)
+
   const app = await createApp({
-    logger: verbose ? { level: 'debug' } : true,
+    logger: loggerOptions as import('fastify').FastifyServerOptions['logger'],
     project,
   })
 

@@ -88,7 +88,7 @@ export function AgentDetailPage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-4">
           {agent.icon ? (
-            <span className="text-3xl leading-none" role="img">{agent.icon}</span>
+            <span className="text-3xl leading-none" role="img" aria-label={`${agent.title || agent.name} icon`}>{agent.icon}</span>
           ) : (
             <span className="w-10 h-10 rounded-lg bg-[var(--color-accent)] text-white text-lg font-bold flex items-center justify-center shrink-0">
               {agent.name.charAt(0).toUpperCase()}
@@ -269,7 +269,7 @@ export function AgentDetailPage() {
               >
                 <div className="flex items-center gap-2">
                   {t.icon ? (
-                    <span className="text-sm leading-none">{t.icon}</span>
+                    <span className="text-sm leading-none" role="img" aria-label={`${t.name} icon`}>{t.icon}</span>
                   ) : (
                     <Users size={14} className="text-[var(--color-accent)]" />
                   )}

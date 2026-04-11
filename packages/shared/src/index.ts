@@ -26,6 +26,8 @@ export type {
   ProjectConfig,
   StudioSettings,
   RegistryConfig,
+  LogLevel,
+  LoggingConfig,
   ProjectStatus,
   AppInfo,
 } from './config.js'

@@ -30,7 +30,7 @@ function TeamCard({
       }`}
     >
       <div className="flex items-center gap-2 mb-2">
-        {team.icon && <span className="text-lg leading-none">{team.icon}</span>}
+        {team.icon && <span className="text-lg leading-none" role="img" aria-label={`${team.name} icon`}>{team.icon}</span>}
         <span className="font-bold text-sm truncate">{team.name}</span>
         {team.module && (
           <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-muted)] shrink-0">

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { X, GitBranch, Users, FileOutput, FileInput, FileText, FolderOpen, Layers, ChevronDown, ChevronRight, Pencil } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
@@ -73,6 +73,18 @@ export function WorkflowDetailPanel({ workflowId, onClose }: WorkflowDetailPanel
   const [expandedSupportingFile, setExpandedSupportingFile] = useState<string | null>(null)
   const [supportingFileContent, setSupportingFileContent] = useState<string | null>(null)
   const [supportingFileLoading, setSupportingFileLoading] = useState(false)
+  const stepAbortRef = useRef<AbortController | null>(null)
+  const templateAbortRef = useRef<AbortController | null>(null)
+  const supportingFileAbortRef = useRef<AbortController | null>(null)
+
+  // Cancel in-flight fetches on unmount
+  useEffect(() => {
+    return () => {
+      stepAbortRef.current?.abort()
+      templateAbortRef.current?.abort()
+      supportingFileAbortRef.current?.abort()
+    }
+  }, [])
 
   useEffect(() => {
     if (!workflow || workflow.type !== 'agent-based') {
@@ -92,21 +104,27 @@ export function WorkflowDetailPanel({ workflowId, onClose }: WorkflowDetailPanel
         setSupportingFileContent(null)
         return
       }
+      supportingFileAbortRef.current?.abort()
+      const controller = new AbortController()
+      supportingFileAbortRef.current = controller
+
       setExpandedSupportingFile(relativePath)
+      setSupportingFileContent(null)
       if (relativePath.endsWith('.md')) {
         setSupportingFileLoading(true)
         try {
-          const resp = await fetch(`/api/files/${relativePath}`)
+          const resp = await fetch(`/api/files/${relativePath}`, { signal: controller.signal })
           if (resp.ok) {
             const data = (await resp.json()) as { content: string }
             setSupportingFileContent(data.content)
           } else {
             setSupportingFileContent('Could not load file.')
           }
-        } catch {
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') return
           setSupportingFileContent('Failed to load file.')
         } finally {
-          setSupportingFileLoading(false)
+          if (!controller.signal.aborted) setSupportingFileLoading(false)
         }
       }
     },
@@ -129,20 +147,28 @@ export function WorkflowDetailPanel({ workflowId, onClose }: WorkflowDetailPanel
         setStepContent(null)
         return
       }
+      stepAbortRef.current?.abort()
+      const controller = new AbortController()
+      stepAbortRef.current = controller
+
       setExpandedStep(globalIndex)
+      setStepContent(null)
       setStepLoading(true)
       try {
-        const resp = await fetch(`/api/workflows/${workflowId}/steps/${globalIndex}`)
+        const resp = await fetch(`/api/workflows/${workflowId}/steps/${globalIndex}`, {
+          signal: controller.signal,
+        })
         if (resp.ok) {
           const data = (await resp.json()) as { content: string }
           setStepContent(data.content)
         } else {
           setStepContent('Could not load step instructions.')
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
         setStepContent('Failed to load step instructions.')
       } finally {
-        setStepLoading(false)
+        if (!controller.signal.aborted) setStepLoading(false)
       }
     },
     [expandedStep, workflowId],
@@ -155,21 +181,27 @@ export function WorkflowDetailPanel({ workflowId, onClose }: WorkflowDetailPanel
         setTemplateContent(null)
         return
       }
+      templateAbortRef.current?.abort()
+      const controller = new AbortController()
+      templateAbortRef.current = controller
+
       setExpandedTemplate(filePath)
+      setTemplateContent(null)
       setTemplateLoading(true)
       try {
         const relativePath = extractRelativePath(filePath)
-        const resp = await fetch(`/api/files/${relativePath}`)
+        const resp = await fetch(`/api/files/${relativePath}`, { signal: controller.signal })
         if (resp.ok) {
           const data = (await resp.json()) as { content: string }
           setTemplateContent(data.content)
         } else {
           setTemplateContent('Could not load template.')
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
         setTemplateContent('Failed to load template.')
       } finally {
-        setTemplateLoading(false)
+        if (!controller.signal.aborted) setTemplateLoading(false)
       }
     },
     [expandedTemplate],

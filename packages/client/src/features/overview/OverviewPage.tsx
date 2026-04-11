@@ -252,7 +252,7 @@ export function OverviewPage() {
                   >
                     <div className="flex items-center gap-2.5 mb-2">
                       {agent.icon ? (
-                        <span className="text-2xl leading-none" role="img">{agent.icon}</span>
+                        <span className="text-2xl leading-none" role="img" aria-label={`${agent.name} icon`}>{agent.icon}</span>
                       ) : (
                         <span className="w-7 h-7 rounded-lg bg-[var(--color-accent)] text-white text-xs font-bold flex items-center justify-center shrink-0">
                           {agent.name.charAt(0).toUpperCase()}
@@ -304,7 +304,7 @@ export function OverviewPage() {
                 >
                   <div className="flex items-center gap-2 mb-2">
                     {t.icon ? (
-                      <span className="text-lg leading-none" role="img">{t.icon}</span>
+                      <span className="text-lg leading-none" role="img" aria-label={`${t.name} icon`}>{t.icon}</span>
                     ) : (
                       <Users size={18} className="text-[var(--color-accent)]" />
                     )}

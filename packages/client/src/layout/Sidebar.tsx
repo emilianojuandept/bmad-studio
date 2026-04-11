@@ -135,7 +135,7 @@ export function Sidebar() {
         <h1 className="text-lg font-extrabold text-[var(--color-text)]">{appTitle}</h1>
       </div>
 
-      <nav className="flex-1 px-2 space-y-1">
+      <nav className="flex-1 px-2 space-y-1" aria-label="Main navigation">
         {navItems.map((item) => (
           <NavItem
             key={item.to}

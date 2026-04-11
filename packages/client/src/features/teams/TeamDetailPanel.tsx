@@ -63,10 +63,15 @@ function DeleteTeamDialog({
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl w-full max-w-md p-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-team-title"
+        className="relative bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl w-full max-w-md p-6"
+      >
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle size={20} className="text-[var(--color-error)]" />
-          <h2 className="text-lg font-bold">Delete Team</h2>
+          <h2 id="delete-team-title" className="text-lg font-bold">Delete Team</h2>
         </div>
 
         <div className="space-y-4">
@@ -206,6 +211,30 @@ export function TeamDetailPanel({ teamId, onClose, onTeamUpdated }: TeamDetailPa
     }
   }
 
+  const handleGenerateFromAgents = () => {
+    if (!team) return
+    const headerRow =
+      'name,displayName,title,icon,role,identity,communicationStyle,principles,module,path'
+    const rows = team.members.map((m) => {
+      const cols = [
+        m.agentId,
+        m.displayName || m.agentId,
+        m.title || '',
+        m.icon || '',
+        m.role || m.title || '',
+        m.identity || '',
+        m.communicationStyle || 'collaborative',
+        m.principles || '',
+        m.module || team.module || '',
+        '',
+      ]
+      const escape = (c: string) =>
+        c.includes(',') || c.includes('"') ? `"${c.replace(/"/g, '""')}"` : c
+      return cols.map(escape).join(',')
+    })
+    setPartyCsvContent([headerRow, ...rows].join('\n'))
+  }
+
   const handleSaveParty = async () => {
     if (!team) return
     try {
@@ -244,7 +273,11 @@ export function TeamDetailPanel({ teamId, onClose, onTeamUpdated }: TeamDetailPa
       <aside className="slide-over-panel" style={{ width: 'max(400px, 40vw)' }}>
         <div className="px-6 py-4 border-b border-[var(--color-border-subtle)] flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0">
-            {team?.icon && <span className="text-xl leading-none">{team.icon}</span>}
+            {team?.icon && (
+              <span className="text-xl leading-none" role="img" aria-label={`${team.name} icon`}>
+                {team.icon}
+              </span>
+            )}
             <h2 className="text-lg font-bold truncate">{team?.name ?? 'Loading...'}</h2>
           </div>
           <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -307,7 +340,7 @@ export function TeamDetailPanel({ teamId, onClose, onTeamUpdated }: TeamDetailPa
                     onClick={() => navigate(`/agents/${member.agentId}`)}
                     className="w-full flex items-start gap-3 p-3 rounded-lg bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)] transition-colors cursor-pointer text-left"
                   >
-                    <span className="text-lg leading-none mt-0.5">{member.icon}</span>
+                    <span className="text-lg leading-none mt-0.5" role="img" aria-label={`${member.displayName} icon`}>{member.icon}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold">{member.displayName}</span>
@@ -394,11 +427,16 @@ export function TeamDetailPanel({ teamId, onClose, onTeamUpdated }: TeamDetailPa
 
               {showParty && editingParty && (
                 <div className="mt-2 space-y-2">
-                  <textarea
-                    value={partyCsvContent}
-                    onChange={(e) => setPartyCsvContent(e.target.value)}
-                    className="w-full h-64 px-3 py-2 text-xs font-[var(--font-mono)] rounded-md bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] focus:border-[var(--color-accent)] focus:outline-none resize-none"
-                  />
+                  <div
+                    className="rounded-lg border border-[var(--color-border-subtle)] overflow-hidden"
+                    style={{ height: 264 }}
+                  >
+                    <CsvViewer
+                      content={partyCsvContent}
+                      editable={true}
+                      onChange={(v) => setPartyCsvContent(v)}
+                    />
+                  </div>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={handleSaveParty}
@@ -414,18 +452,10 @@ export function TeamDetailPanel({ teamId, onClose, onTeamUpdated }: TeamDetailPa
                       Cancel
                     </button>
                     <button
-                      disabled
-                      className="px-3 py-1.5 text-xs rounded-md border border-[var(--color-border-subtle)] text-[var(--color-muted)] opacity-50 cursor-not-allowed"
-                      title="Coming soon"
+                      onClick={handleGenerateFromAgents}
+                      className="px-3 py-1.5 text-xs rounded-md border border-[var(--color-border-subtle)] hover:bg-[var(--color-surface-raised)] transition-colors"
                     >
                       Generate from Agents
-                    </button>
-                    <button
-                      disabled
-                      className="px-3 py-1.5 text-xs rounded-md border border-[var(--color-border-subtle)] text-[var(--color-muted)] opacity-50 cursor-not-allowed"
-                      title="Coming soon"
-                    >
-                      Sync
                     </button>
                   </div>
                 </div>
@@ -506,7 +536,7 @@ export function TeamDetailPanel({ teamId, onClose, onTeamUpdated }: TeamDetailPa
                       />
                       <span className="flex items-center gap-2 min-w-0">
                         {agent.icon && (
-                          <span className="text-sm leading-none">{agent.icon}</span>
+                          <span className="text-sm leading-none" aria-hidden="true">{agent.icon}</span>
                         )}
                         <span className="truncate font-bold">{agent.title || agent.name}</span>
                       </span>

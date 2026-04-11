@@ -139,9 +139,14 @@ export function CreateSkillDialog({ onClose, onCreated }: CreateSkillDialogProps
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[85vh] flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-skill-title"
+        className="relative bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[85vh] flex flex-col"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">New Skill</h2>
+          <h2 id="create-skill-title" className="text-lg font-bold">New Skill</h2>
           <button
             onClick={onClose}
             className="text-[var(--color-muted)] hover:text-[var(--color-text)]"

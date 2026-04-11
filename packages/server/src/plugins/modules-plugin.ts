@@ -85,6 +85,51 @@ export async function modulesPlugin(app: FastifyInstance) {
     return entry
   }
 
+  // Story 17.3 — Clean-slate remove helper. Called by each install branch when
+  // the destination directory already exists so the install can proceed as a
+  // silent upgrade rather than throwing 409.
+  // Throws ValidationError if the module is built-in (cannot be replaced) or
+  // if any I/O step fails. Safe to call when the module dir doesn't exist yet
+  // (all steps guard with existsSync / nullish checks).
+  function cleanRemoveModule(moduleCode: string, bmadDir: string, manifestPath: string): void {
+    const moduleDir = path.join(bmadDir, moduleCode)
+    const manifest = readManifestSafe(manifestPath)
+    const entry = manifest?.modules.find((m) => m.name === moduleCode)
+
+    if (entry?.source === 'built-in') {
+      throw new ValidationError(`Cannot reinstall built-in module "${moduleCode}"`)
+    }
+
+    // 1. Remove IDE skill launchers
+    if (manifest) {
+      const r = removeIdeSkillsForModule(
+        app.fileStore.projectRoot,
+        moduleCode,
+        manifest,
+        app.fileStore.studioDir,
+      )
+      if (!r.ok) throw new ValidationError(r.error)
+    }
+
+    // 2. Delete the module directory
+    if (fs.existsSync(moduleDir)) {
+      const r = deleteDirectory(moduleDir, app.fileStore.studioDir)
+      if (!r.ok) throw new ValidationError(r.error)
+    }
+
+    // 3. Remove the manifest entry so the incoming install writes a fresh one
+    if (manifest) {
+      manifest.modules = manifest.modules.filter((m) => m.name !== moduleCode)
+      const wrote = writeManifestThroughWriteService(
+        manifestPath,
+        manifest,
+        app.fileStore.studioDir,
+        app.fileStore,
+      )
+      if (!wrote.ok) throw new ValidationError(wrote.error)
+    }
+  }
+
   // Story 15.9 — Read-only preview endpoint. Fetches a source (local or github)
   // and returns the parsed module.yaml + entity counts WITHOUT installing anything.
   // For github sources, the downloaded tarball is cached for 5 minutes so the
@@ -274,12 +319,9 @@ export async function modulesPlugin(app: FastifyInstance) {
 
       const destDir = path.join(bmadDir, moduleCode)
 
-      // TD-21 — clean-slate re-install lands in Story 15.7. Until then, an existing
-      // module dir is a 409.
+      // Story 17.3 — clean-slate re-install: silently remove any existing copy before writing.
       if (fs.existsSync(destDir)) {
-        throw new ConflictError(
-          `Module "${moduleCode}" is already installed. Remove it via the existing DELETE endpoint, or wait for clean-slate re-install (Story 15.7).`,
-        )
+        cleanRemoveModule(moduleCode, bmadDir, manifestPath)
       }
 
       const copyResult = copyDirThroughWriteService(
@@ -401,11 +443,9 @@ export async function modulesPlugin(app: FastifyInstance) {
 
         const destDir = path.join(bmadDir, moduleCode)
 
-        // TD-21 — Story 15.7 will replace this with clean-slate re-install.
+        // Story 17.3 — clean-slate re-install.
         if (fs.existsSync(destDir)) {
-          throw new ConflictError(
-            `Module "${moduleCode}" is already installed. Remove it via the existing DELETE endpoint, or wait for clean-slate re-install (Story 15.7).`,
-          )
+          cleanRemoveModule(moduleCode, bmadDir, manifestPath)
         }
 
         const copyResult = copyDirThroughWriteService(
@@ -553,11 +593,9 @@ export async function modulesPlugin(app: FastifyInstance) {
 
           const destModuleDir = path.join(bmadDir, moduleCode)
 
-          // Conflict check — consistent with local/github/zip branches (TD-21).
+          // Story 17.3 — clean-slate re-install.
           if (fs.existsSync(destModuleDir)) {
-            throw new ConflictError(
-              `Module "${moduleCode}" is already installed. Remove it first, or wait for clean-slate re-install.`,
-            )
+            cleanRemoveModule(moduleCode, bmadDir, manifestPath)
           }
 
           const copyResult = copyDirThroughWriteService(
@@ -732,11 +770,9 @@ export async function modulesPlugin(app: FastifyInstance) {
 
       const destDir = path.join(bmadDir, moduleCode)
 
-      // TD-21 — Story 15.7 will replace this with clean-slate re-install.
+      // Story 17.3 — clean-slate re-install.
       if (fs.existsSync(destDir)) {
-        throw new ConflictError(
-          `Module "${moduleCode}" is already installed. Remove it via the existing DELETE endpoint, or wait for clean-slate re-install (Story 15.7).`,
-        )
+        cleanRemoveModule(moduleCode, bmadDir, manifestPath)
       }
 
       const copyResult = copyDirThroughWriteService(

@@ -475,8 +475,8 @@ describe('modules-plugin — Story 15.2 polymorphic install', () => {
     await app.close()
   })
 
-  // ─── AC-15.2.6 — second install of same module returns 409 (TD-21 regression window) ───
-  it('AC-15.2.6: re-install of an existing module returns 409', async () => {
+  // ─── AC-15.2.6 / Story 17.3 — second install of same module returns 200 (clean-slate) ───
+  it('AC-15.2.6: re-install of an existing module returns 200 (clean-slate)', async () => {
     const sourceDir = createSourceModule('reinstall-test', { code: 'reinstall-test' })
 
     const app = await createTestApp()
@@ -492,8 +492,8 @@ describe('modules-plugin — Story 15.2 polymorphic install', () => {
       url: '/api/modules/install',
       payload: { source: { type: 'local', value: sourceDir } },
     })
-    expect(second.statusCode).toBe(409)
-    expect(JSON.parse(second.body).error.message).toContain('already installed')
+    expect(second.statusCode).toBe(200)
+    expect(JSON.parse(second.body).ok).toBe(true)
     await app.close()
   })
 
@@ -1054,8 +1054,8 @@ describe('modules-plugin — Story 15.3 github install', () => {
     await app.close()
   })
 
-  // ─── Re-install of an existing github module returns 409 (TD-21 regression window) ───
-  it('re-install of an existing github module returns 409', async () => {
+  // ─── Story 17.3 — Re-install of an existing github module returns 200 (clean-slate) ───
+  it('Story 17.3: re-install of an existing github module returns 200 (clean-slate)', async () => {
     fetchSpy
       .mockImplementationOnce(async () => mockTarballResponse(VALID_MODULE_TARBALL))
       .mockImplementationOnce(async () => mockTarballResponse(VALID_MODULE_TARBALL))
@@ -1073,8 +1073,8 @@ describe('modules-plugin — Story 15.3 github install', () => {
       url: '/api/modules/install',
       payload: { source: { type: 'github', value: 'owner/repo' } },
     })
-    expect(second.statusCode).toBe(409)
-    expect(JSON.parse(second.body).error.message).toContain('already installed')
+    expect(second.statusCode).toBe(200)
+    expect(JSON.parse(second.body).ok).toBe(true)
     await app.close()
   })
 })
@@ -1280,8 +1280,8 @@ describe('modules-plugin — Story 15.4 zip upload', () => {
     await app.close()
   })
 
-  // ─── AC-15.4.10 (re-install returns 409) ───
-  it('AC-15.4.10: re-install of an existing zip module returns 409', async () => {
+  // ─── AC-15.4.10 / Story 17.3 — re-install returns 200 (clean-slate) ───
+  it('AC-15.4.10: re-install of an existing zip module returns 200 (clean-slate)', async () => {
     const zipBytes = await makeValidZip()
     const { payload: p1, headers: h1 } = makeMultipartPayload(zipBytes)
 
@@ -1301,8 +1301,8 @@ describe('modules-plugin — Story 15.4 zip upload', () => {
       payload: p2,
       headers: h2,
     })
-    expect(second.statusCode).toBe(409)
-    expect(JSON.parse(second.body).error.message).toContain('already installed')
+    expect(second.statusCode).toBe(200)
+    expect(JSON.parse(second.body).ok).toBe(true)
     await app.close()
   })
 
@@ -2458,6 +2458,181 @@ describe('modules-plugin — Story 15.9 preview-source endpoint', () => {
     const body = JSON.parse(resp.body)
     expect(body.moduleYaml.variables).toBeDefined()
     expect(body.moduleYaml.variables.output_folder.default).toBe('output/default')
+
+    await app.close()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story 17.3 — Clean-slate reinstall (local + zip sources)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('modules-plugin — Story 17.3 clean-slate reinstall', () => {
+  let tmpDir: string
+  let srcDir: string
+
+  beforeEach(() => {
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'modules-17-3-')))
+    srcDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'modules-17-3-src-')))
+    const configDir = path.join(tmpDir, '_bmad', '_config')
+    fs.mkdirSync(configDir, { recursive: true })
+    fs.writeFileSync(path.join(configDir, 'manifest.yaml'), yaml.dump(makeManifest([])))
+    fs.mkdirSync(path.join(tmpDir, '.bmad-studio'), { recursive: true })
+  })
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+    fs.rmSync(srcDir, { recursive: true, force: true })
+  })
+
+  function createTestApp() {
+    return createApp({
+      logger: false,
+      serveStatic: false,
+      project: {
+        projectRoot: tmpDir,
+        bmadVersion: '6.2.0',
+        versionSupported: true,
+        modules: [],
+        ideDirectories: [],
+      },
+    })
+  }
+
+  function makeLocalModule(code: string, agentFile: string) {
+    const dir = path.join(srcDir, code)
+    fs.mkdirSync(path.join(dir, 'agents'), { recursive: true })
+    fs.writeFileSync(
+      path.join(dir, 'agents', agentFile),
+      `---\nname: ${agentFile.replace('.md', '')}\ntitle: Test\n---\n# Test\n`,
+    )
+    fs.writeFileSync(dir + '/module.yaml', `code: ${code}\nname: "${code}"\nversion: "1.0.0"\n`)
+    return dir
+  }
+
+  // AC-17.3.1: local source reinstall returns 200 (not 409)
+  it('AC-17.3.1: local source reinstall returns 200', async () => {
+    const modDir = makeLocalModule('replace-me', 'v1-agent.md')
+
+    const app = await createTestApp()
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/modules/install',
+      payload: { source: { type: 'local', value: modDir } },
+    })
+    expect(first.statusCode).toBe(200)
+
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/modules/install',
+      payload: { source: { type: 'local', value: modDir } },
+    })
+    expect(second.statusCode).toBe(200)
+    expect(JSON.parse(second.body).ok).toBe(true)
+
+    await app.close()
+  })
+
+  // AC-17.3.2: reinstall replaces old files with new files
+  it('AC-17.3.2: reinstall replaces old agent with updated agent', async () => {
+    const v1Dir = makeLocalModule('swap-mod', 'old-agent.md')
+
+    const app = await createTestApp()
+    await app.inject({
+      method: 'POST',
+      url: '/api/modules/install',
+      payload: { source: { type: 'local', value: v1Dir } },
+    })
+
+    // Produce a v2 source with a different agent file
+    const v2Dir = path.join(srcDir, 'swap-mod-v2')
+    fs.mkdirSync(path.join(v2Dir, 'agents'), { recursive: true })
+    fs.writeFileSync(
+      path.join(v2Dir, 'agents', 'new-agent.md'),
+      '---\nname: new-agent\ntitle: New\n---\n# New\n',
+    )
+    fs.writeFileSync(v2Dir + '/module.yaml', 'code: swap-mod\nname: "Swap Mod"\nversion: "2.0.0"\n')
+
+    const resp = await app.inject({
+      method: 'POST',
+      url: '/api/modules/install',
+      payload: { source: { type: 'local', value: v2Dir } },
+    })
+    expect(resp.statusCode).toBe(200)
+
+    const destBase = path.join(tmpDir, '_bmad', 'swap-mod', 'agents')
+    expect(fs.existsSync(path.join(destBase, 'new-agent.md'))).toBe(true)
+    expect(fs.existsSync(path.join(destBase, 'old-agent.md'))).toBe(false)
+
+    await app.close()
+  })
+
+  // AC-17.3.3: zip upload reinstall returns 200 (not 409)
+  it('AC-17.3.3: zip upload reinstall returns 200', async () => {
+    const zipBytes = await buildFixtureZip([
+      { entryName: 'agents/zip-agent.md', data: '---\nname: zip-agent\ntitle: Zip\n---\n# Zip\n' },
+      { entryName: 'module.yaml', data: 'code: zip-reinstall\nname: "Zip Reinstall"\nversion: "1.0.0"\n' },
+    ])
+    const { payload: p1, headers: h1 } = makeMultipartPayload(zipBytes)
+
+    const app = await createTestApp()
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/modules/install/upload',
+      payload: p1,
+      headers: h1,
+    })
+    expect(first.statusCode).toBe(200)
+
+    const { payload: p2, headers: h2 } = makeMultipartPayload(zipBytes)
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/modules/install/upload',
+      payload: p2,
+      headers: h2,
+    })
+    expect(second.statusCode).toBe(200)
+    expect(JSON.parse(second.body).ok).toBe(true)
+
+    await app.close()
+  })
+
+  // AC-17.3.4: reinstalling a built-in module is rejected with 422
+  it('AC-17.3.4: reinstalling a built-in module returns 422', async () => {
+    // Manually write a manifest with a built-in entry + create the module dir
+    const configDir = path.join(tmpDir, '_bmad', '_config')
+    const builtInManifest = {
+      installation: {
+        version: '6.2.0',
+        installDate: '2026-01-01T00:00:00.000Z',
+        lastUpdated: '2026-01-01T00:00:00.000Z',
+      },
+      modules: [
+        {
+          name: 'builtin-mod',
+          version: '1.0.0',
+          installDate: '2026-01-01T00:00:00.000Z',
+          lastUpdated: '2026-01-01T00:00:00.000Z',
+          source: 'built-in',
+          npmPackage: null,
+          repoUrl: null,
+        },
+      ],
+    }
+    fs.writeFileSync(path.join(configDir, 'manifest.yaml'), yaml.dump(builtInManifest))
+    const builtInDir = path.join(tmpDir, '_bmad', 'builtin-mod', 'agents')
+    fs.mkdirSync(builtInDir, { recursive: true })
+
+    const srcMod = makeLocalModule('builtin-mod', 'agent.md')
+
+    const app = await createTestApp()
+    const resp = await app.inject({
+      method: 'POST',
+      url: '/api/modules/install',
+      payload: { source: { type: 'local', value: srcMod } },
+    })
+    expect(resp.statusCode).toBe(422)
+    expect(JSON.parse(resp.body).error.message).toContain('built-in')
 
     await app.close()
   })

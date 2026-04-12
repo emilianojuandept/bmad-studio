@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, X, Trash2, Upload } from 'lucide-react'
+import { Plus, X, Trash2, Upload, GitCommit, Bot, GitMerge, ArrowRight } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 
 type CreateWorkflowDialogProps = {
@@ -19,8 +19,41 @@ function toKebab(s: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+const TYPE_OPTIONS = [
+  {
+    value: 'step-based' as const,
+    label: 'Step-based',
+    icon: GitCommit,
+    color: 'text-[var(--color-accent)] bg-blue-500/10 border-blue-500/30',
+    description: 'A sequence of discrete steps, each assigned to an agent. Best for multi-phase processes where handoffs between agents matter.',
+    bestFor: ['Multi-agent pipelines', 'Document creation workflows', 'Review processes'],
+    example: '/create-story → /create-tests → /review',
+  },
+  {
+    value: 'agent-based' as const,
+    label: 'Agent-based',
+    icon: Bot,
+    color: 'text-[var(--color-success)] bg-green-500/10 border-green-500/30',
+    description: 'A single agent handles the entire workflow. Best for focused tasks that one agent can complete end-to-end.',
+    bestFor: ['Single-agent tasks', 'Quick transformations', 'Standalone operations'],
+    example: '/write-prd',
+  },
+  {
+    value: 'composite' as const,
+    label: 'Composite',
+    icon: GitMerge,
+    color: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+    description: 'Orchestrates multiple sub-workflows. Best for large processes that span multiple phases or reuse existing workflows.',
+    bestFor: ['Full project lifecycle', 'Sprint orchestration', 'Multi-phase delivery'],
+    example: '/plan → /sprint → /review',
+  },
+]
+
 export function CreateWorkflowDialog({ onClose, onCreated }: CreateWorkflowDialogProps) {
   const queryClient = useQueryClient()
+
+  // Wizard step: 'pick-type' is the decision tree; 'form' is the rest of the fields
+  const [wizardStep, setWizardStep] = useState<'pick-type' | 'form'>('pick-type')
 
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -154,12 +187,86 @@ export function CreateWorkflowDialog({ onClose, onCreated }: CreateWorkflowDialo
     }
   }
 
+  // ---- Type picker step ----
+  if (wizardStep === 'pick-type') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+        <div className="relative bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl w-full max-w-2xl p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-lg font-bold">New Workflow</h2>
+            <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="text-sm text-[var(--color-muted)] mb-6">What kind of workflow are you building?</p>
+
+          <div className="space-y-3">
+            {TYPE_OPTIONS.map((opt) => {
+              const IconComponent = opt.icon
+              const isSelected = type === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setType(opt.value)
+                    setWizardStep('form')
+                  }}
+                  className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                    isSelected
+                      ? opt.color
+                      : 'border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/50 hover:bg-[var(--color-surface-raised)]'
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isSelected ? opt.color : 'bg-[var(--color-surface-raised)]'}`}>
+                      <IconComponent size={20} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-bold">{opt.label}</p>
+                        <ArrowRight size={16} className="text-[var(--color-muted)]" />
+                      </div>
+                      <p className="text-sm text-[var(--color-muted)] mb-2">{opt.description}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {opt.bestFor.map((b) => (
+                          <span key={b} className="text-xs px-2 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border-subtle)]">
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+                      <code className="mt-2 inline-block text-xs font-[var(--font-mono)] text-[var(--color-muted)]">
+                        e.g. {opt.example}
+                      </code>
+                    </div>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ---- Form step ----
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl w-full max-w-2xl p-6 max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">New Workflow</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWizardStep('pick-type')}
+              className="text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
+              title="Back to type selection"
+            >
+              ←
+            </button>
+            <h2 className="text-lg font-bold">
+              New {type === 'step-based' ? 'Step-based' : type === 'agent-based' ? 'Agent-based' : 'Composite'} Workflow
+            </h2>
+          </div>
           <button onClick={onClose} className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
             <X size={18} />
           </button>
@@ -232,25 +339,6 @@ export function CreateWorkflowDialog({ onClose, onCreated }: CreateWorkflowDialo
                   rows={2}
                   className="w-full px-3 py-2 text-sm rounded-md bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] focus:border-[var(--color-accent)] focus:outline-none resize-none"
                 />
-              </div>
-
-              {/* Workflow type */}
-              <div>
-                <label className="block text-sm font-bold mb-1">Type</label>
-                <div className="flex gap-3">
-                  {(['step-based', 'agent-based', 'composite'] as const).map((t) => (
-                    <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="radio"
-                        name="workflow-type"
-                        checked={type === t}
-                        onChange={() => setType(t)}
-                        className="accent-[var(--color-accent)]"
-                      />
-                      {t === 'step-based' ? 'Step-based' : t === 'agent-based' ? 'Agent-based' : 'Composite'}
-                    </label>
-                  ))}
-                </div>
               </div>
 
               {/* Phase */}

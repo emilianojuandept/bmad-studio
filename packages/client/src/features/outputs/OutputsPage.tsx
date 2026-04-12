@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { FileOutput, ChevronDown, ChevronRight, Brain, FileText, Wrench, Layers } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { FileOutput, ChevronDown, ChevronRight, Brain, FileText, Wrench, Layers, GitBranch, Users, Zap } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { EmptyState } from '../../shared/EmptyState.js'
 import { SlideOver } from '../../shared/SlideOver.js'
@@ -51,6 +51,87 @@ function cleanName(name: string): string {
     .replace(/-(\d{4}-\d{2}-\d{2})(-\d{4})?$/, '') // strip trailing date from brainstorming sessions
     .replace(/-/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+type FrontmatterRefs = {
+  workflow?: string
+  agent?: string
+  skill?: string
+  story?: string | number
+  epic?: string | number
+  sprint?: string | number
+  status?: string
+}
+
+function parseFrontmatterRefs(content: string): FrontmatterRefs {
+  const match = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!match) return {}
+  const fm = match[1]
+  const refs: FrontmatterRefs = {}
+  const extract = (key: string): string | undefined => {
+    const m = fm.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'))
+    return m ? m[1].trim().replace(/^["']|["']$/g, '') : undefined
+  }
+  const w = extract('workflow'); if (w) refs.workflow = w
+  const a = extract('agent'); if (a) refs.agent = a
+  const s = extract('skill'); if (s) refs.skill = s
+  const st = extract('story'); if (st) refs.story = st
+  const ep = extract('epic'); if (ep) refs.epic = ep
+  const sp = extract('sprint'); if (sp) refs.sprint = sp
+  const status = extract('status'); if (status) refs.status = status
+  return refs
+}
+
+function ArtifactCrossLinks({ refs }: { refs: FrontmatterRefs }) {
+  const navigate = useNavigate()
+  const links: Array<{ label: string; route: string; icon: typeof GitBranch; color: string }> = []
+
+  if (refs.workflow) {
+    links.push({ label: `Workflow: ${refs.workflow}`, route: `/workflows?detail=${refs.workflow}`, icon: GitBranch, color: 'text-purple-400' })
+  }
+  if (refs.agent) {
+    links.push({ label: `Agent: ${refs.agent}`, route: `/agents/${refs.agent}`, icon: Users, color: 'text-[var(--color-accent)]' })
+  }
+  if (refs.skill) {
+    links.push({ label: `Skill: ${refs.skill}`, route: `/skills?detail=${refs.skill}`, icon: Zap, color: 'text-[var(--color-success)]' })
+  }
+
+  const tags: string[] = []
+  if (refs.status) tags.push(`status: ${refs.status}`)
+  if (refs.epic !== undefined) tags.push(`epic ${refs.epic}`)
+  if (refs.sprint !== undefined) tags.push(`sprint ${refs.sprint}`)
+  if (refs.story !== undefined) tags.push(`story ${refs.story}`)
+
+  if (links.length === 0 && tags.length === 0) return null
+
+  return (
+    <div className="mb-4 p-3 rounded-lg bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)]">
+      <p className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)] mb-2">From this artifact</p>
+      <div className="flex flex-wrap gap-2">
+        {links.map((l) => {
+          const IconComponent = l.icon
+          return (
+            <button
+              key={l.route}
+              onClick={() => navigate(l.route)}
+              className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border border-[var(--color-border-subtle)] hover:border-[var(--color-accent)] hover:bg-[var(--color-bg)] transition-colors ${l.color}`}
+            >
+              <IconComponent size={11} />
+              {l.label}
+            </button>
+          )
+        })}
+        {tags.map((tag) => (
+          <span
+            key={tag}
+            className="text-xs px-2 py-1 rounded-md bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-muted)]"
+          >
+            {tag}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function CategorySection({
@@ -145,6 +226,8 @@ export function OutputsPage() {
   const [selectedPath, setSelectedPath] = useDetailParam('path')
   const [selectedContent, setSelectedContent] = useState('')
   const [contentLoading, setContentLoading] = useState(false)
+
+  const artifactRefs = useMemo(() => parseFrontmatterRefs(selectedContent), [selectedContent])
 
   // ?category= param for jumping to a section from the Home page
   const [, setCategoryParam] = useDetailParam('category')
@@ -264,14 +347,17 @@ export function OutputsPage() {
         ) : selectedPath?.endsWith('.csv') ? (
           <CsvViewer content={selectedContent} />
         ) : (
-          <div className="rounded-lg overflow-hidden border border-[var(--color-border-subtle)]" style={{ height: 'calc(100vh - 140px)' }}>
-            <MarkdownEditor
-              content={selectedContent}
-              filePath={selectedPath ?? ''}
-              onChange={() => {}}
-              readOnly
-            />
-          </div>
+          <>
+            <ArtifactCrossLinks refs={artifactRefs} />
+            <div className="rounded-lg overflow-hidden border border-[var(--color-border-subtle)]" style={{ height: 'calc(100vh - 200px)' }}>
+              <MarkdownEditor
+                content={selectedContent}
+                filePath={selectedPath ?? ''}
+                onChange={() => {}}
+                readOnly
+              />
+            </div>
+          </>
         )}
       </SlideOver>
     </div>

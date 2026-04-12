@@ -695,42 +695,87 @@ export function ModulesPage() {
           />
         )}
 
-        {activeTab === 'installed' && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {modules.map((mod) => (
-            <button
-              key={mod.name}
-              onClick={() => setSelectedModule(selectedModule === mod.name ? null : mod.name)}
-              className={`p-4 rounded-lg border text-left transition-all cursor-pointer hover:-translate-y-0.5 hover:shadow-md ${
-                selectedModule === mod.name
-                  ? 'bg-[var(--color-surface-raised)] border-[var(--color-accent)]'
-                  : 'bg-[var(--color-surface-raised)] border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]'
-              }`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <Package size={18} className="text-[var(--color-accent)]" />
-                <span className="font-bold text-sm">{mod.name}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-[var(--color-bg)] border border-[var(--color-border-subtle)] text-[var(--color-muted)]">
-                  {mod.source}
-                </span>
-              </div>
-              <p className="text-xs text-[var(--color-muted)] mb-2 ml-7">v{mod.version}</p>
-              <div className="flex gap-4 text-xs text-[var(--color-muted)]">
-                <span className="flex items-center gap-1">
-                  <Users size={10} />
-                  {mod.agentCount} agents
-                </span>
-                <span className="flex items-center gap-1">
-                  <Zap size={10} />
-                  {mod.skillCount} skills
-                </span>
-                <span className="flex items-center gap-1">
-                  <GitBranch size={10} />
-                  {mod.workflowCount} workflows
-                </span>
-              </div>
-            </button>
-          ))}
-        </div>}
+        {activeTab === 'installed' && (
+          modules.length === 0 ? (
+            <div className="py-16 text-center text-sm text-[var(--color-muted)]">
+              No modules installed. Use <strong>Install Module</strong> or <strong>Create Module</strong> to get started.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {modules.map((mod) => {
+                const isSelected = selectedModule === mod.name
+                const initials = mod.name.slice(0, 2).toUpperCase()
+                const totalEntities = mod.agentCount + mod.skillCount + mod.workflowCount
+                const sourceColors: Record<string, string> = {
+                  github: 'bg-green-500/10 text-green-400',
+                  npm: 'bg-red-500/10 text-red-400',
+                  local: 'bg-yellow-500/10 text-yellow-400',
+                  'built-in': 'bg-blue-500/10 text-[var(--color-accent)]',
+                }
+                const sourceColor = sourceColors[mod.source] ?? 'bg-[var(--color-surface-raised)] text-[var(--color-muted)]'
+
+                return (
+                  <button
+                    key={mod.name}
+                    onClick={() => setSelectedModule(isSelected ? null : mod.name)}
+                    className={`group rounded-xl border text-left transition-all cursor-pointer overflow-hidden hover:-translate-y-0.5 hover:shadow-lg ${
+                      isSelected
+                        ? 'border-[var(--color-accent)] shadow-md shadow-[var(--color-accent)]/10'
+                        : 'border-[var(--color-border-subtle)] hover:border-[var(--color-accent)]/60'
+                    }`}
+                  >
+                    {/* Card header */}
+                    <div className="px-4 pt-4 pb-3 bg-[var(--color-surface-raised)]">
+                      <div className="flex items-start gap-3">
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[var(--color-accent)]/20 to-[var(--color-accent)]/5 border border-[var(--color-accent)]/20 flex items-center justify-center shrink-0">
+                          <span className="text-sm font-extrabold text-[var(--color-accent)]">{initials}</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-extrabold text-sm truncate">{mod.name}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-xs text-[var(--color-muted)]">v{mod.version}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${sourceColor}`}>
+                              {mod.source}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Card body */}
+                    <div className="px-4 py-3 bg-[var(--color-bg)] border-t border-[var(--color-border-subtle)]">
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-3 text-xs text-[var(--color-muted)]">
+                          {mod.agentCount > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Users size={11} className="text-[var(--color-accent)]" />
+                              {mod.agentCount}
+                            </span>
+                          )}
+                          {mod.skillCount > 0 && (
+                            <span className="flex items-center gap-1">
+                              <Zap size={11} className="text-[var(--color-success)]" />
+                              {mod.skillCount}
+                            </span>
+                          )}
+                          {mod.workflowCount > 0 && (
+                            <span className="flex items-center gap-1">
+                              <GitBranch size={11} className="text-purple-400" />
+                              {mod.workflowCount}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-[var(--color-muted)]">
+                          {totalEntities} {totalEntities === 1 ? 'entity' : 'entities'}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        )}
       </div>
 
       {selected && (

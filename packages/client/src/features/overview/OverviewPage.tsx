@@ -1,12 +1,39 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { GitBranch, Zap, Plug, Package, Rocket, Users, ArrowRight, CheckCircle2, Circle, Clock, FileText, Brain, Wrench } from 'lucide-react'
+import { GitBranch, Zap, Plug, Package, Rocket, Users, ArrowRight, CheckCircle2, FileText, Brain, Wrench, AlertTriangle, ShieldCheck, BarChart3, ChevronDown } from 'lucide-react'
 
 import { EmptyState } from '../../shared/EmptyState.js'
 import { WorkflowTypeBadge } from '../workflows/WorkflowsPage.js'
 import { EntityCard, CardIcon, CardHeader, CardBody, CardDescription, CardFooter, ModuleBadge, CardGrid } from '../../shared/EntityCard.js'
 
+function formatRelativeDate(input: string): string {
+  const date = new Date(input)
+  if (isNaN(date.getTime())) return input
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffSecs = Math.floor(diffMs / 1000)
+  const diffMins = Math.floor(diffSecs / 60)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffDays < 0) return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  if (diffDays === 0) {
+    if (diffHours === 0) return diffMins <= 1 ? 'just now' : `${diffMins}m ago`
+    return `${diffHours}h ago`
+  }
+  if (diffDays === 1) return 'yesterday'
+  if (diffDays <= 7) return `${diffDays} days ago`
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 type OutputCategory = 'brainstorming' | 'planning' | 'implementation' | 'other'
+
+type EpicDetail = {
+  id: string
+  status: string
+  storyCount: number
+  stories: Array<{ id: string; status: string }>
+}
 
 type ProjectHealth = {
   sprint: {
@@ -15,6 +42,7 @@ type ProjectHealth = {
     storyCounts: { inProgress: number; review: number; done: number; backlog: number; readyForDev: number; total: number }
     inProgressStories: string[]
     reviewStories: string[]
+    epicDetails?: EpicDetail[]
   } | null
   recentOutputs: Array<{ category: OutputCategory; name: string; path: string; modifiedAt: string }>
   outputCounts: { brainstorming: number; planning: number; implementation: number; other: number; total: number }
@@ -39,6 +67,52 @@ function humaniseStoryId(id: string): string {
 function humaniseEpicId(id: string): string {
   // "epic-16" → "Epic 16"
   return id.replace('epic-', 'Epic ')
+}
+
+const STORY_STATUS_STYLE: Record<string, { color: string; label: string }> = {
+  done: { color: 'var(--color-success)', label: 'Done' },
+  'in-progress': { color: 'var(--color-warning)', label: 'In Progress' },
+  review: { color: 'var(--color-accent)', label: 'Review' },
+  'ready-for-dev': { color: 'var(--color-info, var(--color-accent))', label: 'Ready' },
+  backlog: { color: 'var(--color-muted)', label: 'Backlog' },
+}
+
+function EpicAccordion({ epic }: { epic: EpicDetail }) {
+  const [open, setOpen] = useState(epic.status === 'in-progress')
+  const doneCount = epic.stories.filter((s) => s.status === 'done').length
+  const isComplete = epic.status === 'done'
+
+  return (
+    <div className="border border-[var(--color-border-subtle)] rounded-lg overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-bg)] transition-colors cursor-pointer"
+      >
+        <ChevronDown size={14} className={`text-[var(--color-muted)] transition-transform ${open ? '' : '-rotate-90'}`} />
+        <span className="text-xs font-bold flex-1">{humaniseEpicId(epic.id)}</span>
+        <span className="text-xs text-[var(--color-muted)]">{doneCount}/{epic.storyCount}</span>
+        {isComplete ? (
+          <CheckCircle2 size={12} className="text-[var(--color-success)]" />
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-[var(--color-warning)]" />
+        )}
+      </button>
+      {open && (
+        <div className="border-t border-[var(--color-border-subtle)] px-3 py-2 space-y-1">
+          {epic.stories.map((s) => {
+            const style = STORY_STATUS_STYLE[s.status] ?? { color: 'var(--color-muted)', label: s.status }
+            return (
+              <div key={s.id} className="flex items-center gap-2 text-xs">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: style.color }} />
+                <span className="text-[var(--color-text)] truncate flex-1">{humaniseStoryId(s.id)}</span>
+                <span className="shrink-0 text-[var(--color-muted)]">{style.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ProjectStatusPanel({ health }: { health: ProjectHealth }) {
@@ -85,42 +159,26 @@ function ProjectStatusPanel({ health }: { health: ProjectHealth }) {
                       </div>
                     </div>
                   )}
-
-                  {sprint.inProgressStories.length > 0 && (
-                    <div className="space-y-1">
-                      {sprint.inProgressStories.map((s) => (
-                        <div key={s} className="flex items-center gap-2 text-xs">
-                          <Clock size={12} className="text-[var(--color-warning)] shrink-0" />
-                          <span className="text-[var(--color-text)] truncate">{humaniseStoryId(s)}</span>
-                          <span className="text-[var(--color-warning)] shrink-0">In Progress</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {sprint.reviewStories.length > 0 && (
-                    <div className="space-y-1">
-                      {sprint.reviewStories.map((s) => (
-                        <div key={s} className="flex items-center gap-2 text-xs">
-                          <Circle size={12} className="text-[var(--color-accent)] shrink-0" />
-                          <span className="text-[var(--color-text)] truncate">{humaniseStoryId(s)}</span>
-                          <span className="text-[var(--color-accent)] shrink-0">In Review</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {sprint.storyCounts.inProgress === 0 && sprint.storyCounts.review === 0 && sprint.storyCounts.backlog === 0 && (
-                    <div className="flex items-center gap-1.5 text-xs text-[var(--color-success)]">
-                      <CheckCircle2 size={14} />
-                      <span>All stories complete</span>
-                    </div>
-                  )}
                 </>
               ) : (
                 <p className="text-sm text-[var(--color-muted)]">No active epics — all epics complete or backlog.</p>
               )}
+
+              {/* Story 26.1: Expandable epics list */}
+              {sprint.epicDetails && sprint.epicDetails.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {sprint.epicDetails.map((epic) => (
+                    <EpicAccordion key={epic.id} epic={epic} />
+                  ))}
+                </div>
+              )}
+
+              {!sprint.epicDetails?.length && sprint.activeEpics.length === 0 && (
+                <p className="text-sm text-[var(--color-muted)]">No epics defined yet.</p>
+              )}
+
               {sprint.lastUpdated && (
-                <p className="text-xs text-[var(--color-muted)]">Updated {sprint.lastUpdated}</p>
+                <p className="text-xs text-[var(--color-muted)] pt-1">Updated {formatRelativeDate(sprint.lastUpdated)}</p>
               )}
             </div>
           ) : (
@@ -157,7 +215,7 @@ function ProjectStatusPanel({ health }: { health: ProjectHealth }) {
                   <div className="space-y-1.5">
                     {recentOutputs.slice(0, 4).map((f) => {
                       const { icon: Icon } = CATEGORY_META[f.category]
-                      const friendlyDate = new Date(f.modifiedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                      const friendlyDate = formatRelativeDate(f.modifiedAt)
                       return (
                         <Link
                           key={f.path}
@@ -313,6 +371,15 @@ function PhaseTimeline({ commands }: { commands: CommandItem[] }) {
 
 type OverviewData = {
   detected: boolean
+  projectHealth?: { hasProjectContext: boolean }
+  toolkitStats?: {
+    totalSkills: number
+    assignedSkills: number
+    unassignedSkills: number
+    totalAgents: number
+    totalWorkflows: number
+    totalTeams: number
+  }
   sections: {
     teams?: {
       teams: Array<{
@@ -413,9 +480,77 @@ export function OverviewPage() {
     <div>
       <h1 className="text-3xl font-extrabold mb-10">Home</h1>
 
+      {/* Story 26.8: Project Context warning banner */}
+      {data.projectHealth && !data.projectHealth.hasProjectContext && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-[var(--color-warning)]/40 bg-[var(--color-warning)]/5 px-4 py-3">
+          <AlertTriangle size={18} className="text-[var(--color-warning)] shrink-0" />
+          <p className="text-sm text-[var(--color-text)] flex-1">
+            <span className="font-bold">Project context not configured</span> — AI agents won't know your conventions.
+          </p>
+          <Link
+            to="/workspace"
+            className="shrink-0 text-sm font-bold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
+          >
+            Create Project Context &rarr;
+          </Link>
+        </div>
+      )}
+
       <div className="space-y-0">
         {/* Project Status — shown when health data exists */}
         {health && <ProjectStatusPanel health={health} />}
+
+        {/* Story 26.3: Toolkit Summary */}
+        {data.toolkitStats && (
+          <section className="mb-10 border-b border-[var(--color-border-subtle)] pb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-[var(--color-muted)]">Toolkit</h2>
+              <Link
+                to="/skills"
+                className="text-sm font-bold text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors"
+              >
+                View Toolkit &rarr;
+              </Link>
+            </div>
+            <div className="rounded-lg bg-[var(--color-surface-raised)] border border-[var(--color-border-subtle)] p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <BarChart3 size={16} className="text-[var(--color-accent)]" />
+                <span className="text-sm font-bold">
+                  {data.toolkitStats.totalSkills} skills loaded
+                  <span className="font-normal text-[var(--color-muted)]">
+                    {' · '}{data.toolkitStats.assignedSkills} assigned{' · '}{data.toolkitStats.unassignedSkills} unassigned
+                  </span>
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <Link to="/agents" className="flex flex-col items-center gap-1 p-3 rounded-lg bg-[var(--color-bg)] hover:border-[var(--color-accent)] border border-[var(--color-border-subtle)] transition-colors">
+                  <span className="text-2xl font-extrabold text-[var(--color-text)]">{data.toolkitStats.totalAgents}</span>
+                  <span className="text-xs text-[var(--color-muted)]">Agents</span>
+                </Link>
+                <Link to="/skills" className="flex flex-col items-center gap-1 p-3 rounded-lg bg-[var(--color-bg)] hover:border-[var(--color-accent)] border border-[var(--color-border-subtle)] transition-colors">
+                  <span className="text-2xl font-extrabold text-[var(--color-text)]">{data.toolkitStats.totalSkills}</span>
+                  <span className="text-xs text-[var(--color-muted)]">Skills</span>
+                </Link>
+                <Link to="/workflows" className="flex flex-col items-center gap-1 p-3 rounded-lg bg-[var(--color-bg)] hover:border-[var(--color-accent)] border border-[var(--color-border-subtle)] transition-colors">
+                  <span className="text-2xl font-extrabold text-[var(--color-text)]">{data.toolkitStats.totalWorkflows}</span>
+                  <span className="text-xs text-[var(--color-muted)]">Workflows</span>
+                </Link>
+                <Link to="/teams" className="flex flex-col items-center gap-1 p-3 rounded-lg bg-[var(--color-bg)] hover:border-[var(--color-accent)] border border-[var(--color-border-subtle)] transition-colors">
+                  <span className="text-2xl font-extrabold text-[var(--color-text)]">{data.toolkitStats.totalTeams}</span>
+                  <span className="text-xs text-[var(--color-muted)]">Teams</span>
+                </Link>
+              </div>
+
+              {/* Story 26.8: Project Context configured indicator */}
+              {data.projectHealth?.hasProjectContext && (
+                <div className="mt-4 pt-3 border-t border-[var(--color-border-subtle)] flex items-center gap-2 text-xs text-[var(--color-success)]">
+                  <ShieldCheck size={14} />
+                  <span>Project Context: Configured</span>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Agents — first section, renamed from "The Team" */}
         {sections.team && sections.team.count > 0 && (

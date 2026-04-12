@@ -68,4 +68,26 @@ export async function settingsPlugin(app: FastifyInstance) {
 
     return { ok: true }
   })
+
+  // GET /api/projects — return global project registry
+  app.get('/api/projects', async () => {
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? process.cwd()
+    const registryPath = path.join(home, '.bmad-studio', 'projects.json')
+    if (!fs.existsSync(registryPath)) return []
+    try {
+      return JSON.parse(fs.readFileSync(registryPath, 'utf-8'))
+    } catch {
+      return []
+    }
+  })
+
+  // GET /api/project — return current project info
+  app.get('/api/project', async () => {
+    if (!('fileStore' in app)) return { name: null, path: null }
+    const projectRoot = app.fileStore.projectRoot
+    return {
+      name: projectRoot ? path.basename(projectRoot) : null,
+      path: projectRoot ?? null,
+    }
+  })
 }

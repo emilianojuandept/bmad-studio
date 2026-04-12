@@ -15,12 +15,17 @@ import {
   Moon,
   Sun,
   Info,
+  FolderOpen,
+  ChevronDown,
+  Terminal,
 } from 'lucide-react'
 
 import { toggleTheme } from '../lib/theme.js'
 import { useThemeStore } from '../stores/ui-store.js'
 import { useWebSocket } from '../hooks/use-websocket.js'
 import { useAppTitle } from '../hooks/use-app-title.js'
+
+type ProjectEntry = { path: string; name: string; lastOpened: string }
 
 const navItems: Array<{
   to: string
@@ -88,6 +93,10 @@ export function Sidebar() {
   const setTheme = useThemeStore((s) => s.setTheme)
   const [badgeCounts, setBadgeCounts] = useState<Record<string, number>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [currentProject, setCurrentProject] = useState<{ name: string | null; path: string | null } | null>(null)
+  const [allProjects, setAllProjects] = useState<ProjectEntry[]>([])
+  const [showProjectMenu, setShowProjectMenu] = useState(false)
+  const projectMenuRef = useRef<HTMLDivElement>(null)
 
   const fetchBadgeCounts = useCallback(() => {
     Promise.all([
@@ -111,7 +120,26 @@ export function Sidebar() {
 
   useEffect(() => {
     fetchBadgeCounts()
+    Promise.all([
+      fetch('/api/project').then((r) => r.json()).catch(() => null),
+      fetch('/api/projects').then((r) => r.json()).catch(() => []),
+    ]).then(([proj, projects]) => {
+      if (proj) setCurrentProject(proj as { name: string | null; path: string | null })
+      if (Array.isArray(projects)) setAllProjects(projects as ProjectEntry[])
+    })
   }, [fetchBadgeCounts])
+
+  // Close project menu on outside click
+  useEffect(() => {
+    if (!showProjectMenu) return
+    function handleClick(e: MouseEvent) {
+      if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
+        setShowProjectMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showProjectMenu])
 
   useWebSocket(
     useCallback(() => {
@@ -127,10 +155,45 @@ export function Sidebar() {
     setTheme(next)
   }
 
+  const otherProjects = allProjects.filter((p) => p.path !== currentProject?.path)
+
   return (
     <aside className="w-60 h-screen flex flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-bg)]">
-      <div className="px-4 py-5">
-        <h1 className="text-lg font-extrabold text-[var(--color-text)]">{appTitle}</h1>
+      <div className="px-4 py-4 border-b border-[var(--color-border-subtle)]">
+        <h1 className="text-base font-extrabold text-[var(--color-text)] mb-1">{appTitle}</h1>
+        {currentProject?.name && (
+          <div className="relative" ref={projectMenuRef}>
+            <button
+              onClick={() => setShowProjectMenu((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors max-w-full"
+              title={currentProject.path ?? undefined}
+            >
+              <FolderOpen size={12} className="shrink-0" />
+              <span className="truncate">{currentProject.name}</span>
+              {otherProjects.length > 0 && <ChevronDown size={11} className="shrink-0" />}
+            </button>
+
+            {showProjectMenu && otherProjects.length > 0 && (
+              <div className="absolute left-0 top-full mt-1 w-56 bg-[var(--color-bg)] border border-[var(--color-border-subtle)] rounded-lg shadow-xl z-50 overflow-hidden">
+                <div className="px-3 py-2 border-b border-[var(--color-border-subtle)]">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-muted)]">Switch Project</p>
+                </div>
+                {otherProjects.slice(0, 5).map((p) => (
+                  <div key={p.path} className="px-3 py-2 hover:bg-[var(--color-surface-raised)] transition-colors">
+                    <p className="text-xs font-bold text-[var(--color-text)] truncate">{p.name}</p>
+                    <p className="text-[10px] text-[var(--color-muted)] truncate mt-0.5" title={p.path}>{p.path}</p>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <Terminal size={10} className="text-[var(--color-muted)] shrink-0" />
+                      <code className="text-[10px] font-[var(--font-mono)] text-[var(--color-muted)] truncate">
+                        cd {p.path} &amp;&amp; npx bmad-studio
+                      </code>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 px-2 space-y-1" aria-label="Main navigation">

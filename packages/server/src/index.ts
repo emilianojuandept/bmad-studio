@@ -56,6 +56,43 @@ function buildLoggerOptions(
   }
 }
 
+// Global project registry lives at ~/.bmad-studio/projects.json
+function getGlobalRegistryPath(): string {
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? process.cwd()
+  return path.join(home, '.bmad-studio', 'projects.json')
+}
+
+type ProjectEntry = { path: string; name: string; lastOpened: string }
+
+function registerProject(projectRoot: string) {
+  try {
+    const registryPath = getGlobalRegistryPath()
+    const registryDir = path.dirname(registryPath)
+    if (!fs.existsSync(registryDir)) fs.mkdirSync(registryDir, { recursive: true })
+
+    let projects: ProjectEntry[] = []
+    if (fs.existsSync(registryPath)) {
+      try { projects = JSON.parse(fs.readFileSync(registryPath, 'utf-8')) as ProjectEntry[] } catch { /* ignore */ }
+    }
+
+    // Update or insert
+    const existing = projects.findIndex((p) => p.path === projectRoot)
+    const entry: ProjectEntry = {
+      path: projectRoot,
+      name: path.basename(projectRoot),
+      lastOpened: new Date().toISOString(),
+    }
+    if (existing >= 0) projects[existing] = entry
+    else projects.unshift(entry)
+
+    // Keep only 10 most recent
+    projects = projects.slice(0, 10)
+    fs.writeFileSync(registryPath, JSON.stringify(projects, null, 2), 'utf-8')
+  } catch {
+    // Non-fatal — registry is best-effort
+  }
+}
+
 function parseArgs(args: string[]) {
   let port = DEFAULT_PORT
   let dir: string | undefined
@@ -110,6 +147,8 @@ async function main() {
         `  Warning: BMAD version ${project.bmadVersion} may not be fully supported. Supported: v6.x`,
       )
     }
+    // Register this project in the global project registry
+    registerProject(project.projectRoot)
   } else {
     console.warn('No BMAD project found. Run from project root or use --dir /path')
     console.warn('Starting in setup mode...')

@@ -117,19 +117,19 @@ export function WorkspacePage() {
       if (resp.ok) {
         setContent(editContent)
         setEditing(false)
-        notify('success', 'Workspace context saved')
+        notify('success', 'Project Settings context saved')
       } else {
-        notify('error', 'Failed to save workspace context')
+        notify('error', 'Failed to save project context')
       }
     } catch {
-      notify('error', 'Failed to save workspace context')
+      notify('error', 'Failed to save project context')
     }
   }
 
   if (loading) {
     return (
       <div>
-        <h1 className="text-2xl font-extrabold mb-8">Workspace</h1>
+        <h1 className="text-2xl font-extrabold mb-8">Project Settings</h1>
         <Skeleton className="h-64" />
       </div>
     )
@@ -138,10 +138,10 @@ export function WorkspacePage() {
   if (content === null && !editing) {
     return (
       <div>
-        <h1 className="text-2xl font-extrabold mb-8">Workspace</h1>
+        <h1 className="text-2xl font-extrabold mb-8">Project Settings</h1>
         <EmptyState
           icon={Briefcase}
-          title="No workspace context found"
+          title="No project context found"
           description="Create a project-context.md file in your _bmad/ directory to help agents understand your project."
           actions={
             <button
@@ -153,7 +153,7 @@ export function WorkspacePage() {
               }}
               className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors"
             >
-              Create Workspace Context
+              Create Project Settings Context
             </button>
           }
         />
@@ -165,7 +165,7 @@ export function WorkspacePage() {
     return (
       <div className="h-[calc(100vh-8rem)]">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-extrabold">Edit Workspace Context</h1>
+          <h1 className="text-2xl font-extrabold">Edit Project Settings Context</h1>
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -199,7 +199,7 @@ export function WorkspacePage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-extrabold">Workspace</h1>
+        <h1 className="text-2xl font-extrabold">Project Settings</h1>
         <div className="flex items-center gap-3">
           <div className="flex gap-1 bg-[var(--color-surface-raised)] rounded-md p-0.5">
             {(['structured', 'raw', 'preview', 'config'] as const).map((tab) => (
@@ -231,7 +231,7 @@ export function WorkspacePage() {
             <CollapsibleSection key={i} section={section} />
           ))}
           {sections.length === 0 && (
-            <p className="text-sm text-[var(--color-muted)]">No structured sections found in workspace context.</p>
+            <p className="text-sm text-[var(--color-muted)]">No structured sections found in project context.</p>
           )}
         </div>
       )}

@@ -74,3 +74,17 @@ export class ManifestMissingError extends AppError {
     this.name = 'ManifestMissingError'
   }
 }
+
+/**
+ * Thrown when a v6.5 manifest file (`manifest.yaml`, `skill-manifest.csv`,
+ * `bmad-help.csv`) exists but cannot be parsed or has a structurally invalid shape.
+ *
+ * Status 422 (Unprocessable Entity) — input file is in a bad state.
+ * Used by v65/manifest-loader.ts (Story 31.2).
+ */
+export class ManifestParseError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super('MANIFEST_PARSE_ERROR', message, 422, 'error', details)
+    this.name = 'ManifestParseError'
+  }
+}

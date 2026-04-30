@@ -15,6 +15,8 @@
  *
  * Story 31.3 adds a two-tier cache (in-memory + on-disk) keyed on the SHA-256
  * of `files-manifest.csv`. Use `loadManifestCached` as the entry point.
+ * Story 31.5 adds `watchManifest` — a chokidar watcher that calls
+ * `invalidateCache` whenever any `_bmad/_config` manifest file changes.
  */
 
 import crypto from 'node:crypto'
@@ -22,6 +24,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import yaml from 'js-yaml'
 import Papa from 'papaparse'
+import { watch } from 'chokidar'
 
 import type {
   BmadHelpEntry,
@@ -360,4 +363,46 @@ export function loadManifestCached(projectRoot: string): CacheEntry {
  */
 export function invalidateCache(projectRoot: string): void {
   memoryCache.delete(projectRoot)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story 31.5 — chokidar watcher + cache invalidation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Tracks which project roots already have an active chokidar watcher. */
+const watched = new Set<string>()
+
+/**
+ * Register a chokidar watcher for the three `_bmad/_config` manifest files.
+ *
+ * Idempotent: subsequent calls for the same `projectRoot` are no-ops.
+ * On any `change` event, the in-memory cache is evicted via `invalidateCache`
+ * and the optional `onInvalidate` callback is invoked.
+ *
+ * Called by `ModuleLoader.load()` the first time a v6.5 project is loaded
+ * (Story 31.4). No tests are required (chokidar timing is unreliable in unit
+ * tests — see Story 31.5 spec note).
+ *
+ * @param projectRoot  Absolute path to the BMAD project root.
+ * @param onInvalidate Optional callback invoked after cache eviction.
+ */
+export function watchManifest(projectRoot: string, onInvalidate?: () => void): void {
+  if (watched.has(projectRoot)) return
+  watched.add(projectRoot)
+
+  const configDir = path.join(projectRoot, '_bmad', '_config')
+  const patterns = ['manifest.yaml', 'skill-manifest.csv', 'files-manifest.csv'].map((f) =>
+    path.join(configDir, f),
+  )
+
+  watch(patterns, { awaitWriteFinish: { stabilityThreshold: 150 } }).on(
+    'change',
+    (filePath: string) => {
+      invalidateCache(projectRoot)
+      console.log(
+        JSON.stringify({ event: 'v65.cache.invalidated', projectRoot, trigger: filePath }),
+      )
+      onInvalidate?.()
+    },
+  )
 }

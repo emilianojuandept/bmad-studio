@@ -26,6 +26,10 @@ import { toggleTheme } from '../lib/theme.js'
 import { useThemeStore } from '../stores/ui-store.js'
 import { useWebSocket } from '../hooks/use-websocket.js'
 import { useAppTitle } from '../hooks/use-app-title.js'
+import { useDrift } from '../hooks/use-drift.js'
+import { DriftBadge } from '../components/drift-badge/DriftBadge.js'
+import { DriftListView } from '../components/drift-badge/DriftListView.js'
+import { DriftConvertFlow } from '../components/drift-badge/DriftConvertFlow.js'
 
 type ProjectEntry = { path: string; name: string; lastOpened: string }
 
@@ -235,6 +239,8 @@ export function Sidebar() {
   }
 
   const appTitle = useAppTitle()
+  const drift = useDrift()
+  const [driftListOpen, setDriftListOpen] = useState(false)
 
   function handleToggleTheme() {
     const next = toggleTheme()
@@ -246,7 +252,10 @@ export function Sidebar() {
   return (
     <aside className="w-60 h-screen flex flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-bg)]">
       <div className="px-4 py-4 border-b border-[var(--color-border-subtle)]">
-        <h1 className="text-base font-extrabold text-[var(--color-text)] mb-1">{appTitle}</h1>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h1 className="text-base font-extrabold text-[var(--color-text)]">{appTitle}</h1>
+          <DriftBadge count={drift.count} onClick={() => setDriftListOpen(true)} />
+        </div>
         {currentProject?.name && (
           <div className="relative" ref={projectMenuRef}>
             <button
@@ -328,6 +337,25 @@ export function Sidebar() {
           <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
         </button>
       </div>
+
+      {driftListOpen && (
+        <DriftListView
+          files={drift.files}
+          onConvert={(f) => {
+            void drift.convert(f.path)
+          }}
+          onReset={(f) => {
+            void drift.resetToBaseline(f.path)
+          }}
+          onClose={() => setDriftListOpen(false)}
+        />
+      )}
+      {drift.conversionToken && (
+        <DriftConvertFlow
+          token={drift.conversionToken}
+          onClose={() => drift.clearConversionToken()}
+        />
+      )}
     </aside>
   )
 }

@@ -10,6 +10,9 @@ export type ErrorCode =
   | 'MANIFEST_PARSE_ERROR'
   | 'WRITE_FAILED'
   | 'CUSTOMIZE_PARSE_ERROR'
+  | 'DRIFT_NO_PROJECT'
+  | 'DRIFT_NOT_DETECTED'
+  | 'drift-conversion-stale'
 
 export type ApiError = {
   error: {

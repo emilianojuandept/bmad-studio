@@ -51,4 +51,13 @@ export type {
   WebSocketEvent,
 } from './events.js'
 export type { Severity, ErrorCode, ApiError } from './errors.js'
+export type {
+  V65WsEvent,
+  ManifestChangedEvent,
+  SkillManifestChangedEvent,
+  CustomizeChangedEvent,
+  DriftDetectedEvent,
+  DriftClearedEvent,
+  HealthPythonChangedEvent,
+} from './ws-events.js'
 export type { RegistryStatus, RegistryModuleEntry, RegistryIndex } from './registry.js'

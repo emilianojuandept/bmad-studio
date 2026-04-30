@@ -11,6 +11,8 @@
  *   - Plain array — concatenate: [...base, ...override]
  */
 
+import type { LayerOrigin, Resolved } from '@bmad-studio/shared'
+
 export type TomlValue = string | number | boolean | TomlValue[] | TomlObject
 export type TomlObject = { [key: string]: TomlValue }
 
@@ -98,6 +100,68 @@ export function mergeArray(base: TomlValue[], override: TomlValue[]): TomlValue[
 // ---------------------------------------------------------------------------
 
 /**
+ * Maps a layers-array length to the canonical layer name sequence used for
+ * provenance tracking.
+ *
+ *   1 layer  → ['base']
+ *   2 layers → ['base', 'user']
+ *   3 layers → ['base', 'team', 'user']
+ *   4 layers → ['base', 'user_base', 'team', 'user']
+ */
+function layerNames(count: number): LayerOrigin[] {
+  switch (count) {
+    case 0:
+      return []
+    case 1:
+      return ['base']
+    case 2:
+      return ['base', 'user']
+    case 3:
+      return ['base', 'team', 'user']
+    default:
+      // 4+ layers: first is 'base', second is 'user_base', second-to-last is
+      // 'team', last is 'user'. Extra middle layers fall back to 'merged'.
+      return ['base', 'user_base', 'team', 'user'].slice(0, count) as LayerOrigin[]
+  }
+}
+
+/**
+ * Classify how a key changed when a new layer is applied.
+ * Returns the LayerOrigin to assign to `key` after merging `baseVal` with `overrideVal`.
+ *
+ * @param baseVal       - accumulated value before this layer (undefined = new key)
+ * @param overrideVal   - value from the current layer
+ * @param currentLayerName - canonical name for this layer index
+ * @param existingOrigin   - the provenance recorded for this key so far (used when
+ *                           a no-op override should leave the origin unchanged)
+ */
+function provenanceForKey(
+  baseVal: TomlValue | undefined,
+  overrideVal: TomlValue,
+  currentLayerName: LayerOrigin,
+  existingOrigin: LayerOrigin | undefined,
+): LayerOrigin {
+  if (baseVal === undefined) {
+    // Brand-new key introduced by this layer.
+    return currentLayerName
+  }
+  if (isTomlObject(baseVal) && isTomlObject(overrideVal)) {
+    // Table merge — sub-keys may come from different layers → 'merged'.
+    return 'merged'
+  }
+  if (Array.isArray(baseVal) && Array.isArray(overrideVal)) {
+    if (overrideVal.length === 0) {
+      // Override contributes nothing — preserve existing origin.
+      return existingOrigin ?? currentLayerName
+    }
+    // Any non-empty array modification (append or keyed-replace) → 'merged'.
+    return 'merged'
+  }
+  // Scalar: the current layer wins.
+  return currentLayerName
+}
+
+/**
  * Fold a stack of TOML layers left-to-right starting with `{}`.
  *
  * For each pair of values sharing a key, the merge strategy is:
@@ -107,17 +171,39 @@ export function mergeArray(base: TomlValue[], override: TomlValue[]): TomlValue[
  * - Otherwise → `mergeScalar` (override wins)
  *
  * An empty `layers` array returns `{} as T`.
+ *
+ * When called with `{ provenance: true }`, returns `Resolved<T>` — the merged
+ * object plus a top-level provenance map recording which layer last contributed
+ * each field. The non-provenance path has zero overhead.
  */
-export function resolveLayered<T extends TomlObject>(layers: TomlObject[]): T {
-  let result: TomlObject = {}
+export function resolveLayered<T extends TomlObject>(
+  layers: TomlObject[],
+  options?: { provenance?: false },
+): T
+export function resolveLayered<T extends TomlObject>(
+  layers: TomlObject[],
+  options: { provenance: true },
+): Resolved<T>
+export function resolveLayered<T extends TomlObject>(
+  layers: TomlObject[],
+  options?: { provenance?: boolean },
+): T | Resolved<T> {
+  const trackProvenance = options?.provenance === true
+  const names = trackProvenance ? layerNames(layers.length) : []
 
-  for (const layer of layers) {
+  let result: TomlObject = {}
+  let prov: Record<string, LayerOrigin> = {}
+
+  for (let i = 0; i < layers.length; i++) {
+    const layer = layers[i]
+    const layerName = names[i] as LayerOrigin | undefined
     const merged: TomlObject = { ...result }
+    const nextProv: Record<string, LayerOrigin> = trackProvenance ? { ...prov } : prov
+
     for (const [key, overrideVal] of Object.entries(layer)) {
       const baseVal = merged[key]
 
       if (baseVal === undefined) {
-        // Key only in this layer — take it as-is.
         merged[key] = overrideVal
       } else if (isTomlObject(baseVal) && isTomlObject(overrideVal)) {
         merged[key] = mergeTable(baseVal, overrideVal)
@@ -130,9 +216,20 @@ export function resolveLayered<T extends TomlObject>(layers: TomlObject[]): T {
       } else {
         merged[key] = mergeScalar(baseVal, overrideVal)
       }
+
+      if (trackProvenance && layerName !== undefined) {
+        nextProv[key] = provenanceForKey(baseVal, overrideVal, layerName, prov[key])
+      }
     }
+
     result = merged
+    if (trackProvenance) {
+      prov = nextProv
+    }
   }
 
+  if (trackProvenance) {
+    return { merged: result as T, provenance: prov }
+  }
   return result as T
 }

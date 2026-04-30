@@ -6,6 +6,7 @@ import {
   mergeKeyedArray,
   mergeArray,
   resolveLayered,
+  type TomlObject,
 } from './customize-resolver.js'
 
 // ---------------------------------------------------------------------------
@@ -342,5 +343,167 @@ describe('resolveLayered', () => {
     resolveLayered([l1, l2])
     expect(l1).toEqual({ a: 1 })
     expect(l2).toEqual({ a: 2 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveLayered — provenance mode
+// ---------------------------------------------------------------------------
+
+describe('resolveLayered (provenance mode)', () => {
+  // --- Default call returns T directly (not Resolved<T>) ---
+
+  it('default call (no options) returns merged object directly', () => {
+    const result = resolveLayered([{ a: 1, b: 'x' }])
+    // result should be a plain TomlObject, not { merged, provenance }
+    expect(result).toEqual({ a: 1, b: 'x' })
+    expect((result as { merged?: unknown }).merged).toBeUndefined()
+  })
+
+  it('{ provenance: false } returns merged object directly', () => {
+    const result = resolveLayered([{ a: 1 }], { provenance: false })
+    expect(result).toEqual({ a: 1 })
+    expect((result as { merged?: unknown }).merged).toBeUndefined()
+  })
+
+  // --- Single base layer: all keys have origin 'base' ---
+
+  it('single layer — all keys have "base" origin', () => {
+    const base: TomlObject = {
+      icon: 'robot',
+      name: 'Agent X',
+      principles: ['think', 'act'],
+    }
+    const { merged, provenance } = resolveLayered([base], { provenance: true })
+
+    expect(merged).toEqual(base)
+    expect(provenance.icon).toBe('base')
+    expect(provenance.name).toBe('base')
+    expect(provenance.principles).toBe('base')
+  })
+
+  // --- Scalar overridden in layer 2 (user) → 'user' ---
+
+  it('scalar overridden in layer 2 → origin is "user"', () => {
+    const base: TomlObject = { icon: 'robot', name: 'Agent X' }
+    const user: TomlObject = { icon: 'star' }
+
+    const { merged, provenance } = resolveLayered([base, user], { provenance: true })
+
+    expect(merged.icon).toBe('star')
+    expect(provenance.icon).toBe('user')
+    // name not overridden — still from base
+    expect(provenance.name).toBe('base')
+  })
+
+  // --- Three layers: icon overridden in team → 'team' (AC: provenance.icon === 'team') ---
+
+  it('three layers: icon overridden in team layer → provenance.icon === "team"', () => {
+    const base: TomlObject = { icon: 'robot', version: 1 }
+    const team: TomlObject = { icon: 'gear' }
+    const user: TomlObject = { version: 2 }
+
+    const { merged, provenance } = resolveLayered([base, team, user], { provenance: true })
+
+    expect(merged.icon).toBe('gear')
+    expect(provenance.icon).toBe('team')
+    // version overridden in user
+    expect(provenance.version).toBe('user')
+  })
+
+  // --- Three layers: user overrides scalar that team also touched → 'user' ---
+
+  it('three layers: user overrides scalar last → provenance is "user"', () => {
+    const base: TomlObject = { name: 'base-name' }
+    const team: TomlObject = { name: 'team-name' }
+    const user: TomlObject = { name: 'user-name' }
+
+    const { provenance } = resolveLayered([base, team, user], { provenance: true })
+
+    expect(provenance.name).toBe('user')
+  })
+
+  // --- Table with sub-key overridden → table key has 'merged' ---
+
+  it('table with sub-key overridden → provenance for that key is "merged"', () => {
+    const base: TomlObject = { meta: { version: 1, stable: true } }
+    const user: TomlObject = { meta: { version: 2 } }
+
+    const { merged, provenance } = resolveLayered([base, user], { provenance: true })
+
+    expect((merged.meta as TomlObject).version).toBe(2)
+    expect((merged.meta as TomlObject).stable).toBe(true)
+    expect(provenance.meta).toBe('merged')
+  })
+
+  // --- Plain array appended → 'merged' (AC: provenance.principles === 'merged') ---
+
+  it('plain array appended across layers → provenance.principles === "merged"', () => {
+    const base: TomlObject = { principles: ['think'] }
+    const team: TomlObject = { principles: ['plan'] }
+    const user: TomlObject = { principles: ['act'] }
+
+    const { merged, provenance } = resolveLayered([base, team, user], { provenance: true })
+
+    expect(merged.principles).toEqual(['think', 'plan', 'act'])
+    expect(provenance.principles).toBe('merged')
+  })
+
+  // --- Keyed array replaced/extended → 'merged' ---
+
+  it('keyed array with override items → provenance is "merged"', () => {
+    const base: TomlObject = { steps: [{ code: 'a', label: 'Alpha' }] }
+    const user: TomlObject = { steps: [{ code: 'a', label: 'ALPHA' }, { code: 'b', label: 'Beta' }] }
+
+    const { merged, provenance } = resolveLayered([base, user], { provenance: true })
+
+    expect((merged.steps as TomlObject[])).toHaveLength(2)
+    expect(provenance.steps).toBe('merged')
+  })
+
+  // --- Key only in one layer preserves correct origin ---
+
+  it('key only in base — not touched by later layers — keeps "base" origin', () => {
+    const base: TomlObject = { icon: 'robot', stable: true }
+    const team: TomlObject = { icon: 'gear' }
+    const user: TomlObject = {}
+
+    const { provenance } = resolveLayered([base, team, user], { provenance: true })
+
+    expect(provenance.stable).toBe('base')
+  })
+
+  it('key introduced only in team layer — origin is "team"', () => {
+    const base: TomlObject = { name: 'x' }
+    const team: TomlObject = { icon: 'gear' }
+    const user: TomlObject = {}
+
+    const { provenance } = resolveLayered([base, team, user], { provenance: true })
+
+    expect(provenance.icon).toBe('team')
+  })
+
+  // --- Empty layers with provenance ---
+
+  it('empty layers with provenance returns empty merged + empty provenance', () => {
+    const { merged, provenance } = resolveLayered([], { provenance: true })
+    expect(merged).toEqual({})
+    expect(provenance).toEqual({})
+  })
+
+  // --- Four-layer name mapping ---
+
+  it('four layers: scalar set in layer 2 (user_base) — origin is "user_base" (type-safe cast)', () => {
+    const l1: TomlObject = { a: 1 }
+    const l2: TomlObject = { b: 2 }    // user_base
+    const l3: TomlObject = { c: 3 }    // team
+    const l4: TomlObject = { d: 4 }    // user
+
+    const { provenance } = resolveLayered([l1, l2, l3, l4], { provenance: true })
+
+    expect(provenance.a).toBe('base')
+    expect(provenance.b).toBe('user_base' as never)
+    expect(provenance.c).toBe('team')
+    expect(provenance.d).toBe('user')
   })
 })

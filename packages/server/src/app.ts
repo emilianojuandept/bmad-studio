@@ -24,6 +24,8 @@ import { teamsPlugin } from './plugins/teams-plugin.js'
 import { commandsPlugin } from './plugins/commands-plugin.js'
 import { datasourcesPlugin } from './plugins/datasources-plugin.js'
 import { detectProject, type ProjectDetectionResult } from './core/project-detector.js'
+// Side-effect import — registers all v6.5 hook templates into HOOK_TEMPLATES
+import './v65/templates/index.js'
 
 // Bump this constant if a real registry module exceeds the limit. Local-tool default —
 // not security-critical. See finding #17 / spec §6.1 for the rationale.

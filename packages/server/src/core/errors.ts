@@ -60,3 +60,17 @@ export class FileSystemError extends AppError {
     this.name = 'FileSystemError'
   }
 }
+
+/**
+ * Thrown when bmad-studio cannot find the expected `_bmad/` directory or its
+ * required manifest files for the detected BMAD version.
+ *
+ * Status 422 (Unprocessable Entity) — input is structurally absent, not malformed.
+ * Used by core/module-loader.ts (Story 31.1) and v65/manifest-loader.ts (Story 31.2).
+ */
+export class ManifestMissingError extends AppError {
+  constructor(message: string, details?: unknown) {
+    super('MANIFEST_MISSING', message, 422, 'error', details)
+    this.name = 'ManifestMissingError'
+  }
+}

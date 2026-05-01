@@ -60,11 +60,30 @@ Just a simple agent with no XML.
     }
   })
 
-  it('handles malformed content gracefully', () => {
+  it('handles malformed content gracefully — falls back to filename stem', () => {
     const result = parseAgent('bad.md', '')
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(result.data.id).toBe('')
+      expect(result.data.id).toBe('bad')
+      expect(result.data.menu).toHaveLength(0)
+    }
+  })
+
+  it('parses v6.5 plain-markdown agents (no XML, no frontmatter)', () => {
+    const v65Agent = `# Artifact Analyzer
+
+You are a research analyst. Your job is to scan project documents and extract information relevant to a product concept.
+
+## Input
+
+You will receive a product intent and scan paths.
+`
+    const result = parseAgent('_bmad/bmm/1-analysis/bmad-prfaq/agents/artifact-analyzer.md', v65Agent)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.data.id).toBe('artifact-analyzer')
+      expect(result.data.name).toBe('Artifact Analyzer')
+      expect(result.data.title).toBe('Artifact Analyzer')
       expect(result.data.menu).toHaveLength(0)
     }
   })

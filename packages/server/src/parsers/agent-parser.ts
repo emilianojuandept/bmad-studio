@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 import matter from 'gray-matter'
 
 import type { Agent, AgentMenuItem } from '@bmad-studio/shared'
@@ -41,6 +43,11 @@ function extractPersona(content: string): { identity?: string; communicationStyl
   }
 }
 
+function extractH1(body: string): string | undefined {
+  const match = /^#\s+(.+)$/m.exec(body)
+  return match ? match[1].trim() : undefined
+}
+
 function extractMenuItems(content: string): AgentMenuItem[] {
   const items: AgentMenuItem[] = []
   const itemRegex = /<item\s+([^>]*)>([^<]*)<\/item>/g
@@ -79,10 +86,14 @@ export function parseAgent(filePath: string, content: string): ParseResult<Agent
     const menuItems = extractMenuItems(body)
     const persona = extractPersona(body)
 
+    // v6.5 plain-markdown agents have no XML/frontmatter — fall back to H1 heading + filename
+    const h1Name = extractH1(body)
+    const fileBaseName = path.basename(filePath, '.md')
+
     const agent: Agent = {
-      id: xmlAttrs.id || (frontmatter.name as string) || '',
-      name: xmlAttrs.name || (frontmatter.name as string) || '',
-      title: xmlAttrs.title || (frontmatter.description as string) || '',
+      id: xmlAttrs.id || (frontmatter.name as string) || fileBaseName,
+      name: xmlAttrs.name || (frontmatter.name as string) || h1Name || fileBaseName,
+      title: xmlAttrs.title || (frontmatter.description as string) || h1Name || '',
       icon: xmlAttrs.icon,
       role: xmlAttrs.role || (frontmatter.description as string) || '',
       module: undefined,

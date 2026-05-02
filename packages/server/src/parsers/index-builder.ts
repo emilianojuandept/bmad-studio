@@ -72,6 +72,14 @@ function collectResult<T>(result: ParseResult<T>, successes: T[], errors: Entity
   }
 }
 
+/**
+ * Title-case a string (e.g. "analysis" -> "Analysis", "my-team" -> "My-team")
+ */
+function toTitleCase(str: string): string {
+  if (!str) return str
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
 export function buildIndex(projectRoot: string): EntityIndex {
   const bmadDir = path.join(projectRoot, '_bmad')
   const index: EntityIndex = {
@@ -181,6 +189,46 @@ export function buildIndex(projectRoot: string): EntityIndex {
             if (!agent.module && entry.module) agent.module = String(entry.module)
           }
         }
+
+        // Story 40.1: Derive teams from config.toml [agents.*] team fields
+        // Group agents by their team field value
+        const teamMap = new Map<string, string[]>()
+        for (const agent of index.agents) {
+          if (agent.team) {
+            const members = teamMap.get(agent.team) ?? []
+            members.push(agent.id)
+            teamMap.set(agent.team, members)
+          }
+        }
+
+        for (const [teamId, agentIds] of teamMap) {
+          const members = agentIds.flatMap((agentId) => {
+            const agent = index.agents.find((a) => a.id === agentId)
+            if (!agent) return []
+            return [{
+              agentId,
+              displayName: agent.title || agent.name || agentId,
+              title: agent.title || '',
+              icon: agent.icon || '',
+              role: agent.role || '',
+              communicationStyle: agent.communicationStyle || '',
+              identity: agent.identity || '',
+              principles: agent.principles || '',
+              module: agent.module || '',
+            }]
+          })
+
+          index.teams.push({
+            id: teamId,
+            name: toTitleCase(teamId),
+            icon: '',
+            description: '',
+            agentIds,
+            members,
+            partyFile: '',
+            filePath: mainConfigTomlPath,
+          })
+        }
       } catch {
         // config.toml enrichment is best-effort — skip on parse failure
       }
@@ -228,6 +276,23 @@ export function buildIndex(projectRoot: string): EntityIndex {
       }
       collectResult(result, index.workflows, index.errors)
     }
+
+    // Parse team files (*.yaml in teams/ directories) — v6 only
+    const teamFiles = scanRecursive(
+      bmadDir,
+      (name, isDir) => !isDir && name.endsWith('.yaml'),
+    ).filter((f) => f.includes('/teams/') && !f.includes('manifest'))
+    for (const teamPath of teamFiles) {
+      const result = parseTeam(teamPath)
+      if (result.ok) {
+        const relPath = path.relative(bmadDir, teamPath)
+        const moduleName = relPath.split(path.sep)[0]
+        if (moduleName !== '_config') {
+          result.data.module = moduleName
+        }
+      }
+      collectResult(result, index.teams, index.errors)
+    }
   }
 
   // Parse skill files (SKILL.md) — common to v6 and v6.5
@@ -243,23 +308,6 @@ export function buildIndex(projectRoot: string): EntityIndex {
       }
     }
     collectResult(result, index.skills, index.errors)
-  }
-
-  // Parse team files (*.yaml in teams/ directories)
-  const teamFiles = scanRecursive(
-    bmadDir,
-    (name, isDir) => !isDir && name.endsWith('.yaml'),
-  ).filter((f) => f.includes('/teams/') && !f.includes('manifest'))
-  for (const teamPath of teamFiles) {
-    const result = parseTeam(teamPath)
-    if (result.ok) {
-      const relPath = path.relative(bmadDir, teamPath)
-      const moduleName = relPath.split(path.sep)[0]
-      if (moduleName !== '_config') {
-        result.data.module = moduleName
-      }
-    }
-    collectResult(result, index.teams, index.errors)
   }
 
   // Parse package files

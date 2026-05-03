@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export type CustomizeData = {
   base: string
@@ -12,10 +12,51 @@ export type UseCustomizeResult =
   | { status: 'loading' }
   | { status: 'error'; message: string }
   | { status: 'not-customizable' }
-  | { status: 'ok'; data: CustomizeData }
+  | { status: 'ok'; data: CustomizeData; revert: () => void }
 
 export function useCustomize(skillId: string | null): UseCustomizeResult {
   const [result, setResult] = useState<UseCustomizeResult>({ status: 'loading' })
+
+  const fetchData = useCallback(
+    (signal?: AbortSignal) => {
+      if (skillId === null) {
+        setResult({ status: 'loading' })
+        return
+      }
+
+      setResult({ status: 'loading' })
+
+      fetch(`/api/skills/${skillId}/customize`, { signal })
+        .then(async (res) => {
+          if (!res.ok) {
+            if (res.status === 404) {
+              const body = await res.json().catch(() => ({}))
+              const code = (body as { error?: { code?: string } })?.error?.code
+              if (code === 'NOT_FOUND' || code === 'skill-not-customizable') {
+                setResult({ status: 'not-customizable' })
+                return
+              }
+            }
+            const body = await res.json().catch(() => ({}))
+            const message =
+              (body as { error?: { message?: string } })?.error?.message ??
+              `Request failed with status ${res.status}`
+            setResult({ status: 'error', message })
+            return
+          }
+
+          const data = (await res.json()) as CustomizeData
+          setResult({ status: 'ok', data, revert: () => fetchData() })
+        })
+        .catch((err: unknown) => {
+          if (err instanceof DOMException && err.name === 'AbortError') return
+          const message = err instanceof Error ? err.message : 'Unknown error'
+          setResult({ status: 'error', message })
+        })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [skillId],
+  )
 
   useEffect(() => {
     if (skillId === null) {
@@ -24,41 +65,12 @@ export function useCustomize(skillId: string | null): UseCustomizeResult {
     }
 
     const controller = new AbortController()
-
-    setResult({ status: 'loading' })
-
-    fetch(`/api/skills/${skillId}/customize`, { signal: controller.signal })
-      .then(async (res) => {
-        if (!res.ok) {
-          if (res.status === 404) {
-            const body = await res.json().catch(() => ({}))
-            const code = (body as { error?: { code?: string } })?.error?.code
-            if (code === 'NOT_FOUND' || code === 'skill-not-customizable') {
-              setResult({ status: 'not-customizable' })
-              return
-            }
-          }
-          const body = await res.json().catch(() => ({}))
-          const message =
-            (body as { error?: { message?: string } })?.error?.message ??
-            `Request failed with status ${res.status}`
-          setResult({ status: 'error', message })
-          return
-        }
-
-        const data = (await res.json()) as CustomizeData
-        setResult({ status: 'ok', data })
-      })
-      .catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return
-        const message = err instanceof Error ? err.message : 'Unknown error'
-        setResult({ status: 'error', message })
-      })
+    fetchData(controller.signal)
 
     return () => {
       controller.abort()
     }
-  }, [skillId])
+  }, [skillId, fetchData])
 
   return result
 }

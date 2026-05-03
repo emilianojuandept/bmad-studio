@@ -1,32 +1,27 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { parse as parseToml } from 'smol-toml'
 import type { FastifyInstance } from 'fastify'
 import type { Skill, SkillListItem } from '@bmad-studio/shared'
 
-import { NotFoundError, ValidationError } from '../core/errors.js'
+import { NotFoundError, ValidationError, AppError } from '../core/errors.js'
 import { writeFile } from '../core/write-service.js'
 import { resolveSkillCustomization } from '../v65/customize-resolver.js'
+import { atomicWrite } from '../core/atomic-write.js'
+import { verifyMerge, probePython } from '../v65/python-bridge.js'
 
-/**
- * Derive the project root from a skill's filePath by finding the first segment
- * whose parent is `_bmad`. E.g.:
- *   /home/user/project/_bmad/core/skills/bmad-agent-pm/SKILL.md
- *   → /home/user/project
- */
 function deriveProjectRoot(skillFilePath: string): string {
   const parts = skillFilePath.split('/_bmad/')
   if (parts.length >= 2) {
     return parts[0]
   }
-  // Fallback: walk up until we find _bmad as a direct child
   let dir = path.dirname(skillFilePath)
   while (true) {
     const parent = path.dirname(dir)
-    if (parent === dir) break // reached filesystem root
+    if (parent === dir) break
     const bmadCandidate = path.join(parent, '_bmad')
     if (fs.existsSync(bmadCandidate) && fs.statSync(bmadCandidate).isDirectory()) {
-      // Check that dir is actually inside _bmad
       const relative = path.relative(bmadCandidate, dir)
       if (!relative.startsWith('..')) {
         return parent
@@ -90,6 +85,87 @@ export async function skillsPlugin(app: FastifyInstance) {
       }
 
       return { ok: true, filePath: result.filePath }
+    },
+  )
+
+  // Write customize layer (team or user TOML override)
+  app.put<{ Params: { id: string }; Body: { layer: 'team' | 'user'; toml: string } }>(
+    '/api/skills/:id/customize',
+    async (request) => {
+      if (!('fileStore' in app)) throw new NotFoundError('File store not available')
+
+      // 1. Find skill by id
+      const index = app.fileStore.getIndex()
+      const skill = index.skills.find((s) => s.id === request.params.id)
+      if (!skill) throw new NotFoundError(`Skill "${request.params.id}" not found`)
+
+      const { layer, toml } = request.body as { layer: 'team' | 'user'; toml: string }
+
+      // 2. Validate TOML — parse error → 400
+      try {
+        parseToml(toml)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        throw new AppError('CUSTOMIZE_PARSE_ERROR', msg, 400, 'error', { skillId: skill.id, layer })
+      }
+
+      // 3. Derive project root
+      const projectRoot = deriveProjectRoot(skill.filePath)
+
+      // 4. Determine write path based on layer
+      const fileName = layer === 'user' ? `${skill.id}.user.toml` : `${skill.id}.toml`
+      const writePath = path.join(projectRoot, '_bmad', 'custom', fileName)
+
+      // 5. Security check — path must stay within _bmad/custom/
+      const resolvedWrite = path.resolve(writePath)
+      const resolvedCustomDir = path.resolve(projectRoot) + '/_bmad/custom/'
+      if (!resolvedWrite.startsWith(resolvedCustomDir)) {
+        throw new ValidationError(`Write path "${writePath}" is outside allowed directory`)
+      }
+
+      // 6. Ensure directory exists
+      await fs.promises.mkdir(path.dirname(writePath), { recursive: true })
+
+      // 7. Write atomically
+      await atomicWrite(writePath, toml)
+
+      // 8. Broadcast WS event
+      if (app.ws) {
+        app.ws.broadcast({ type: 'customize:changed', skillId: request.params.id, layer })
+      }
+
+      // 9. Return ok
+      return { ok: true }
+    },
+  )
+
+  // Verify customize merge (Python bridge)
+  app.post<{ Params: { id: string }; Body: { key: 'agent' | 'workflow' } }>(
+    '/api/skills/:id/customize/verify',
+    async (request) => {
+      if (!('fileStore' in app)) throw new NotFoundError('File store not available')
+
+      // 1. Find skill by id
+      const index = app.fileStore.getIndex()
+      const skill = index.skills.find((s) => s.id === request.params.id)
+      if (!skill) throw new NotFoundError(`Skill "${request.params.id}" not found`)
+
+      const { key } = request.body as { key: 'agent' | 'workflow' }
+
+      // 2. Derive roots
+      const projectRoot = deriveProjectRoot(skill.filePath)
+      const skillRoot = path.dirname(skill.filePath)
+
+      // 3. Determine Python availability (respect app-level flag if set, otherwise probe)
+      const pythonAvail =
+        'pythonResolverAvailable' in app
+          ? (app as { pythonResolverAvailable: boolean }).pythonResolverAvailable
+          : probePython().available
+
+      // 4. Call verifyMerge — always return 200 with its verdict
+      const result = await verifyMerge(skillRoot, projectRoot, key, { pythonAvailable: pythonAvail })
+
+      return result
     },
   )
 

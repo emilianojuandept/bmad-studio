@@ -364,7 +364,7 @@ export async function workflowsPlugin(app: FastifyInstance) {
       const index = app.fileStore.getIndex()
       const workflow = index.workflows.find((w) => w.id === request.params.id)
       if (!workflow) throw new NotFoundError(`Workflow "${request.params.id}" not found`)
-      return computeWorkflowStatus(workflow.io, app.fileStore.projectRoot)
+      return computeWorkflowStatus(workflow.io, app.fileStore.projectRoot, index.workflows, workflow.id)
     },
   )
 

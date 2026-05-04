@@ -21,6 +21,7 @@ export type WorkflowStatusResult = {
     files: Array<{ path: string; modifiedAt: string }>
   }>
   blockedReasons?: string[]
+  downstream?: Array<{ id: string; name: string; module?: string; inputId: string }>
 }
 
 export function useWorkflows() {

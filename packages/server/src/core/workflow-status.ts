@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { WorkflowIo, WorkflowInput, WorkflowOutput } from '@bmad-studio/shared'
+import type { WorkflowIo, WorkflowInput, WorkflowOutput, Workflow } from '@bmad-studio/shared'
 
 export type InputStatus = 'present' | 'missing' | 'thin'
 
@@ -20,11 +20,19 @@ export type OutputStatusDetail = {
   files: Array<{ path: string; modifiedAt: string }>
 }
 
+export type DownstreamConsumer = {
+  id: string
+  name: string
+  module?: string
+  inputId: string
+}
+
 export type WorkflowStatus = {
   status: 'ready' | 'blocked' | 'already-run' | 'unknown'
   inputs: InputStatusDetail[]
   outputs: OutputStatusDetail[]
   blockedReasons?: string[]
+  downstream?: DownstreamConsumer[]
 }
 
 const MIN_FILE_BYTES = 50
@@ -141,7 +149,37 @@ function findFilesForOutput(output: WorkflowOutput, projectRoot: string): Array<
   return results
 }
 
-export function computeWorkflowStatus(io: WorkflowIo | undefined, projectRoot: string): WorkflowStatus {
+function findDownstreamConsumers(
+  thisWorkflowId: string,
+  io: WorkflowIo,
+  allWorkflows: Workflow[],
+): DownstreamConsumer[] {
+  if (io.outputs.length === 0) return []
+  const outputFileTypes = new Set(io.outputs.map((o) => o.fileType).filter(Boolean) as string[])
+  const outputIds = new Set(io.outputs.map((o) => o.id))
+
+  const consumers: DownstreamConsumer[] = []
+  for (const wf of allWorkflows) {
+    if (wf.id === thisWorkflowId || !wf.io) continue
+    for (const inp of wf.io.inputs) {
+      const matches =
+        (inp.fileType && outputFileTypes.has(inp.fileType)) ||
+        outputIds.has(inp.id)
+      if (matches) {
+        consumers.push({ id: wf.id, name: wf.name, module: wf.module, inputId: inp.id })
+        break
+      }
+    }
+  }
+  return consumers
+}
+
+export function computeWorkflowStatus(
+  io: WorkflowIo | undefined,
+  projectRoot: string,
+  allWorkflows?: Workflow[],
+  thisWorkflowId?: string,
+): WorkflowStatus {
   if (!io || (io.inputs.length === 0 && io.outputs.length === 0)) {
     return { status: 'unknown', inputs: [], outputs: [] }
   }
@@ -179,13 +217,20 @@ export function computeWorkflowStatus(io: WorkflowIo | undefined, projectRoot: s
   const blockedReasons = blockedInputs.map((i) => `Missing required input: ${i.id}`)
 
   const hasAnyOutput = outputDetails.some((o) => o.files.length > 0)
+
+  const downstream = allWorkflows && thisWorkflowId
+    ? findDownstreamConsumers(thisWorkflowId, io, allWorkflows)
+    : undefined
+
+  const base = { inputs: inputDetails, outputs: outputDetails, downstream: downstream?.length ? downstream : undefined }
+
   if (hasAnyOutput) {
-    return { status: 'already-run', inputs: inputDetails, outputs: outputDetails, blockedReasons: blockedReasons.length > 0 ? blockedReasons : undefined }
+    return { ...base, status: 'already-run', blockedReasons: blockedReasons.length > 0 ? blockedReasons : undefined }
   }
 
   if (blockedReasons.length > 0) {
-    return { status: 'blocked', inputs: inputDetails, outputs: outputDetails, blockedReasons }
+    return { ...base, status: 'blocked', blockedReasons }
   }
 
-  return { status: 'ready', inputs: inputDetails, outputs: outputDetails }
+  return { ...base, status: 'ready' }
 }

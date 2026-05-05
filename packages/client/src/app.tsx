@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { NotificationProvider } from './layout/NotificationProvider.js'
@@ -12,7 +12,7 @@ import { SkillsPage } from './features/skills/SkillsPage.js'
 import { WorkflowsPage } from './features/workflows/WorkflowsPage.js'
 import { OutputsPage } from './features/outputs/OutputsPage.js'
 import { ConnectionsPage } from './features/connections/ConnectionsPage.js'
-import { WorkspacePage } from './features/workspace/WorkspacePage.js'
+import { ProjectContextEditorPage } from './features/project-context/ProjectContextEditorPage.js'
 import { ModulesPage } from './features/packages/PackagesPage.js'
 import { FilesPage } from './features/files/FilesPage.js'
 import { SettingsPage } from './features/settings/SettingsPage.js'
@@ -45,7 +45,8 @@ export function App() {
               <Route path="workflows" element={<WorkflowsPage />} />
               <Route path="outputs" element={<OutputsPage />} />
               <Route path="connections" element={<ConnectionsPage />} />
-              <Route path="workspace" element={<WorkspacePage />} />
+              <Route path="workspace" element={<Navigate to="/project-context" replace />} />
+              <Route path="project-context" element={<ProjectContextEditorPage />} />
               <Route path="modules" element={<ModulesPage />} />
               <Route path="files" element={<FilesPage />} />
               <Route path="toolkit" element={<ToolkitPage />} />

@@ -67,3 +67,6 @@ export type {
 } from './ws-events.js'
 export type { RegistryStatus, RegistryModuleEntry, RegistryIndex } from './registry.js'
 export type { LayerOrigin, Resolved, HookEntry, WorkflowHooks } from './types/Customize.js'
+export type { LintRule, LintFinding } from './linter/types.js'
+export { runLinter, computeQualityScore, scoreLabel } from './linter/engine.js'
+export { PC_RULES } from './linter/rules/pc-rules.js'

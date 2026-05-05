@@ -16,6 +16,7 @@ import {
   FolderOpen,
   ChevronDown,
   Loader2,
+  FileText,
 } from 'lucide-react'
 
 import type { WebSocketEvent } from '@bmad-studio/shared'
@@ -68,6 +69,7 @@ const settingsGroup: NavGroup = {
   label: 'Settings',
   icon: Settings,
   items: [
+    { to: '/project-context', label: 'Project Context', icon: FileText },
     { to: '/settings', label: 'Preferences', icon: Settings },
     { to: '/modules', label: 'Modules', icon: Package, badgeKey: 'modules' },
     { to: '/connections', label: 'IDE Connections', icon: Plug, badgeKey: 'connections' },

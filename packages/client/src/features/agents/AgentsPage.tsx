@@ -9,14 +9,18 @@ import { EmptyState } from '../../shared/EmptyState.js'
 import { EntityPageHeader } from '../../shared/EntityPageHeader.js'
 import { CardGrid } from '../../shared/EntityCard.js'
 import { SkeletonCard } from '../../shared/Skeleton.js'
-import { useProjectMode } from '../../lib/use-project-mode.js'
+// BB1 fork: useProjectMode no longer needed (New Agent button always shown).
+// import { useProjectMode } from '../../lib/use-project-mode.js'
 
 export function AgentsPage() {
   const { data: agents, isLoading, error, refetch } = useAgents()
   const [activeModule, setActiveModule] = useState<string>('all')
   const [search, setSearch] = useState('')
   const [showCreate, setShowCreate] = useState(false)
-  const { isV65 } = useProjectMode()
+  // BB1 fork: useProjectMode() was used to hide New Agent on v6.5+; we now
+  // show it unconditionally because the entities endpoint registers agents
+  // properly. The hook call is removed to avoid an unused-import warning.
+  // const { isV65 } = useProjectMode()
 
   const modules = useMemo(() => {
     if (!agents) return []
@@ -95,14 +99,15 @@ export function AgentsPage() {
               >
                 Browse Modules
               </Link>
-              {!isV65 && (
-                <button
-                  onClick={() => setShowCreate(true)}
-                  className="px-4 py-2 text-sm rounded-md border border-[var(--color-border-subtle)] hover:bg-[var(--color-surface-raised)] transition-colors"
-                >
-                  New Agent
-                </button>
-              )}
+              {/* BB1 fork: expose New Agent on v6.5+ too. Upstream hides it
+                  because v6.5+ agent creation needed extra plumbing (config.toml
+                  registration); we add that plumbing in the entities endpoint. */}
+              <button
+                onClick={() => setShowCreate(true)}
+                className="px-4 py-2 text-sm rounded-md border border-[var(--color-border-subtle)] hover:bg-[var(--color-surface-raised)] transition-colors"
+              >
+                New Agent
+              </button>
             </>
           }
         />
@@ -126,15 +131,15 @@ export function AgentsPage() {
         onSearchChange={setSearch}
         filteredCount={activeModule !== 'all' || search ? filtered.length : undefined}
         actions={
-          !isV65 ? (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors flex items-center gap-1.5"
-            >
-              <Plus size={14} />
-              New Agent
-            </button>
-          ) : null
+          // BB1 fork: show New Agent on v6.5+ too — entities endpoint now
+          // registers agents in config.toml + skill-manifest.csv on create.
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors flex items-center gap-1.5"
+          >
+            <Plus size={14} />
+            New Agent
+          </button>
         }
       />
 

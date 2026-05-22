@@ -6,6 +6,7 @@ import type { Agent, AgentListItem } from '@bmad-studio/shared'
 
 import { NotFoundError, ValidationError } from '../core/errors.js'
 import { writeFile } from '../core/write-service.js'
+import { invalidateCache } from '../v65/manifest-loader.js'
 
 function agentToListItem(agent: Agent): AgentListItem {
   return {
@@ -31,6 +32,56 @@ function toKebab(s: string): string {
 
 function escapeYaml(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+// BB1 fork: escape a TOML string value (basic strings, double quotes).
+function tomlEscape(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
+}
+
+// BB1 fork: escape a CSV field (RFC 4180).
+function csvEscape(value: string): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+// BB1 fork: append a `[agents.<slug>]` section to `_bmad/config.toml` so the
+// v6.5+ index-builder classifies this entity as an agent (the `agentLookup` it
+// reads from config.toml). Without this entry, the agent is treated as a workflow.
+function appendAgentToConfigToml(
+  projectRoot: string,
+  slug: string,
+  fields: { module: string; name: string; title: string; icon?: string; description: string },
+): void {
+  const tomlPath = path.join(projectRoot, '_bmad', 'config.toml')
+  if (!fs.existsSync(tomlPath)) return
+  const existing = fs.readFileSync(tomlPath, 'utf-8')
+  // Skip if section already exists (idempotent)
+  const sectionRegex = new RegExp(`^\\[agents\\.${slug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]`, 'm')
+  if (sectionRegex.test(existing)) return
+
+  const lines: string[] = ['', `[agents.${slug}]`, `module = "${tomlEscape(fields.module)}"`]
+  if (fields.name) lines.push(`name = "${tomlEscape(fields.name)}"`)
+  if (fields.title) lines.push(`title = "${tomlEscape(fields.title)}"`)
+  if (fields.icon) lines.push(`icon = "${tomlEscape(fields.icon)}"`)
+  if (fields.description) lines.push(`description = "${tomlEscape(fields.description)}"`)
+  const block = lines.join('\n') + '\n'
+  const sep = existing.endsWith('\n') ? '' : '\n'
+  fs.appendFileSync(tomlPath, sep + block, 'utf-8')
+}
+
+// BB1 fork: append a row to skill-manifest.csv. Idempotent on canonicalId.
+function appendSkillManifestRow(
+  projectRoot: string,
+  row: { canonicalId: string; name: string; description: string; module: string; path: string },
+): void {
+  const csvPath = path.join(projectRoot, '_bmad', '_config', 'skill-manifest.csv')
+  if (!fs.existsSync(csvPath)) return
+  const existing = fs.readFileSync(csvPath, 'utf-8')
+  const idRegex = new RegExp(`^"${row.canonicalId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'm')
+  if (idRegex.test(existing)) return
+  const line = [row.canonicalId, row.name, row.description, row.module, row.path].map(csvEscape).join(',')
+  const sep = existing.endsWith('\n') ? '' : '\n'
+  fs.appendFileSync(csvPath, sep + line + '\n', 'utf-8')
 }
 
 export async function agentsPlugin(app: FastifyInstance) {
@@ -82,6 +133,29 @@ export async function agentsPlugin(app: FastifyInstance) {
     if (!result.ok) throw new ValidationError(result.error)
 
     app.fileStore.rebuild()
+
+    // BB1 fork: register the agent in skill-manifest.csv + config.toml so the
+    // v6.5+ index-builder classifies it as an agent (not a workflow). Without
+    // these two writes, POST /api/agents wrote the .md file successfully but
+    // /api/agents returned empty because no manifest row existed, and even if
+    // one existed the missing [agents.<slug>] section meant it'd be classified
+    // as workflow rather than agent.
+    const relPath = path.relative(app.fileStore.projectRoot, filePath)
+    appendSkillManifestRow(app.fileStore.projectRoot, {
+      canonicalId: slug,
+      name: slug,
+      description: role,
+      module: moduleName,
+      path: relPath,
+    })
+    appendAgentToConfigToml(app.fileStore.projectRoot, slug, {
+      module: moduleName,
+      name,
+      title,
+      icon: icon || undefined,
+      description: role,
+    })
+    invalidateCache(app.fileStore.projectRoot)
 
     reply.code(201)
     return { ok: true, name, path: filePath }

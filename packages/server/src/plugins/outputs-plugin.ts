@@ -79,6 +79,25 @@ function parseSprintStatus(sprintStatusPath: string) {
   }
 }
 
+// Patched for bb1 fork: Node <20.12 does not populate Dirent.parentPath when
+// readdirSync({recursive:true}). We use a manual walker so fullPath is always
+// correct regardless of Node version. Also wraps statSync in try/catch to
+// survive files that disappear between readdir and stat.
+function walkFiles(dir: string): Array<{ fullPath: string; name: string }> {
+  const out: Array<{ fullPath: string; name: string }> = []
+  const entries = fs.readdirSync(dir, { withFileTypes: true })
+  for (const entry of entries) {
+    if (entry.name.startsWith('.')) continue
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      out.push(...walkFiles(full))
+    } else if (entry.isFile()) {
+      out.push({ fullPath: full, name: entry.name })
+    }
+  }
+  return out
+}
+
 function summariseOutputDir(outputDir: string) {
   if (!fs.existsSync(outputDir)) {
     return { counts: { brainstorming: 0, planning: 0, implementation: 0, other: 0, total: 0 }, recent: [] as Array<{ category: OutputCategory; name: string; path: string; modifiedAt: string }> }
@@ -87,16 +106,17 @@ function summariseOutputDir(outputDir: string) {
   const counts = { brainstorming: 0, planning: 0, implementation: 0, other: 0, total: 0 }
   const recent: Array<{ category: OutputCategory; name: string; path: string; modifiedAt: string }> = []
 
-  const entries = fs.readdirSync(outputDir, { withFileTypes: true, recursive: true })
-  for (const entry of entries) {
-    if (!entry.isFile() || entry.name.startsWith('.')) continue
-    const fullPath = path.join(entry.parentPath ?? outputDir, entry.name)
+  for (const { fullPath, name } of walkFiles(outputDir)) {
     const relPath = path.relative(outputDir, fullPath)
     const cat = categoriseOutput(relPath)
-    const stats = fs.statSync(fullPath)
-    counts[cat]++
-    counts.total++
-    recent.push({ category: cat, name: entry.name, path: relPath, modifiedAt: stats.mtime.toISOString() })
+    try {
+      const stats = fs.statSync(fullPath)
+      counts[cat]++
+      counts.total++
+      recent.push({ category: cat, name, path: relPath, modifiedAt: stats.mtime.toISOString() })
+    } catch {
+      // skip files that disappeared between readdir and stat
+    }
   }
 
   // Return 5 most recently modified
@@ -109,20 +129,19 @@ function scanOutputs(outputDir: string): Output[] {
   if (!fs.existsSync(outputDir)) return []
 
   const outputs: Output[] = []
-  const entries = fs.readdirSync(outputDir, { withFileTypes: true, recursive: true })
-
-  for (const entry of entries) {
-    if (entry.isFile() && !entry.name.startsWith('.')) {
-      const fullPath = path.join(entry.parentPath ?? outputDir, entry.name)
+  for (const { fullPath, name } of walkFiles(outputDir)) {
+    try {
       const stats = fs.statSync(fullPath)
       const relPath = path.relative(outputDir, fullPath)
       outputs.push({
         path: relPath,
-        name: entry.name,
-        type: path.extname(entry.name).slice(1),
+        name,
+        type: path.extname(name).slice(1),
         size: stats.size,
         modifiedAt: stats.mtime.toISOString(),
       })
+    } catch {
+      // skip
     }
   }
 

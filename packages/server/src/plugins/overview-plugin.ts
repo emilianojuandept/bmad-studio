@@ -12,8 +12,16 @@ export async function overviewPlugin(app: FastifyInstance) {
 
     const index = app.fileStore.getIndex()
 
-    // Detect project-context.md and extract overview description
-    const projectContextPath = path.join(app.fileStore.projectRoot, '_bmad-output', 'project-context.md')
+    // Detect project-context.md and extract overview description.
+    // BB1 fork: Studio's save endpoint writes to `_bmad-output/planning-artifacts/project-context.md`
+    // (consistent with BMAD's planning_artifacts config), but this check originally only looked at
+    // `_bmad-output/project-context.md` at the root, so the Home banner kept showing
+    // "Project context not configured" even after a successful save. Check both locations,
+    // preferring the planning-artifacts path that Studio actually writes to.
+    const projectRoot = app.fileStore.projectRoot
+    const planningPath = path.join(projectRoot, '_bmad-output', 'planning-artifacts', 'project-context.md')
+    const rootPath = path.join(projectRoot, '_bmad-output', 'project-context.md')
+    const projectContextPath = fs.existsSync(planningPath) ? planningPath : rootPath
     const hasProjectContext = fs.existsSync(projectContextPath)
     let projectDescription = ''
     if (hasProjectContext) {

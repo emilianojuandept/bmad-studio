@@ -8,7 +8,7 @@ import yaml from 'js-yaml'
 
 import { ValidationError, ConflictError, NotFoundError } from '../core/errors.js'
 import { detectVersion } from '../core/module-loader.js'
-import { loadManifestCached } from '../v65/manifest-loader.js'
+import { loadManifestCached, invalidateCache } from '../v65/manifest-loader.js'
 import {
   fetchAndCacheRegistryIndex,
   isRegistryCacheStale,
@@ -955,6 +955,12 @@ export async function modulesPlugin(app: FastifyInstance) {
 
     // Rebuild index
     app.fileStore.rebuild()
+
+    // BB1 fork patch: invalidate the v6.5 manifest cache so /GET /api/modules
+    // immediately reflects the new module without requiring a Studio restart.
+    // Without this, the cache key (SHA-256 of files-manifest.csv) doesn't change
+    // on module add, so loadManifestCached returns stale data forever.
+    invalidateCache(app.fileStore.projectRoot)
 
     reply.status(201)
     return { ok: true, name }

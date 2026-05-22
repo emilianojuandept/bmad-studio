@@ -355,14 +355,25 @@ export function loadManifestCached(projectRoot: string): CacheEntry {
 }
 
 /**
- * Evict the in-memory cache entry for `projectRoot`.
+ * Evict both the in-memory and on-disk cache entries for `projectRoot`.
  *
- * Called by the chokidar watcher (Story 31.5) when any `_bmad/_config`
- * manifest file changes. The next `loadManifestCached` call will re-read
- * from disk or do a cold parse.
+ * BB1 fork patch: previously this only evicted the in-memory cache, which
+ * meant `loadManifestCached` would re-hydrate from the stale disk cache on
+ * the next call (because the cache hash is keyed on files-manifest.csv, which
+ * doesn't change when modules/agents/skills are added via the API). Now we
+ * delete the disk cache file too so the next load does a cold parse.
+ *
+ * Called by:
+ *   - the chokidar watcher (Story 31.5) when any `_bmad/_config` manifest changes
+ *   - the BB1 fork patch to `POST /api/modules` (modules-plugin.ts)
  */
 export function invalidateCache(projectRoot: string): void {
   memoryCache.delete(projectRoot)
+  try {
+    fs.unlinkSync(diskCachePath(projectRoot))
+  } catch {
+    /* disk cache may not exist yet — fine */
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

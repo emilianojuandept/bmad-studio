@@ -213,38 +213,82 @@ function parseDocLite(raw: string): DocLite {
 // Template
 // ---------------------------------------------------------------------------
 
+// BB1 fork: BB1-flavored template (commercial/methodology projects), replaces
+// the upstream engineering-flavored default. Same 9 canonical sections so the
+// linter and SECTION_DEFS remain valid.
 const STARTER_TEMPLATE = `## Project Overview
 
-Describe what this project does, who owns it, and its current status.
+This is a BB1 project: a BMAD-powered workspace for running commercial
+analyses, strategy diagnoses, and agentic methodology work for DEPT clients.
+
+Replace this paragraph with your engagement scope: which client, which
+industry, which phase of the GIF you are in.
 
 ## Technology Stack
 
-- **Language**: TypeScript / JavaScript
-- **Framework**: (e.g. React 18, Fastify 5)
-- **Runtime**: Node.js v20+
+- **Methodology framework**: BMAD v6.7+
+- **Studio**: BB1 fork of BMAD Studio
+- **Runtime**: Claude Code (agent execution)
+- **Model**: Claude Sonnet 4.5 or newer
 
 ## Architecture Overview
 
-Briefly describe the major subsystems and how they communicate.
+BB1 projects are configuration-only. There is no code to build. Studio
+configures agents and skills; the IDE (Claude Code) executes them when
+invoked. Artifacts land in \`_bmad-output/\`.
+
+- \`_bmad/<your-module>/agents/\`: agent definitions (e.g. Alex)
+- \`_bmad/<your-module>/skills/\`: methodologies
+- \`_bmad-output/planning-artifacts/\`: generated deliverables
 
 ## Conventions
 
-### Naming
+### Output style
 
-- Files: kebab-case
-- Components: PascalCase
+- **Signal first**: lead with the answer, evidence supports it
+- **Tables over prose** for benchmarks, action lists, and comparisons
+- **Executive summary at the top** of every deliverable, decision-ready
+- **Cite evidence** for every claim; mark hypotheses explicitly
 
-### File Organization
+### Communication
 
-- Describe where different file types live
+- Plain language; define jargon on first use
+- No em dashes (use period or comma)
 
 ## Anti-patterns
 
-- List things AI agents should never do in this codebase
+- Never produce later stages before earlier ones are validated
+- Never improvise methodology; agents always follow the skill's defined steps
+- Never recommend a Central Bet without naming the trade-off it accepts
+- Never use walls of text where a table fits
+- Never assume client data; ask explicitly if missing
 
 ## Known Issues
 
-- Document any active bugs, workarounds, or technical debt
+- Agents execute in Claude Code, not Studio (Studio is configuration-only by design)
+- Custom skills are not auto-deployed to \`.claude/skills/\`; copy manually
+- Module creation and agent registration require the BB1 fork's patches
+
+## External Dependencies
+
+- **BMAD-METHOD** (\`bmad-method\` npm package): the underlying agent framework
+- **BB1 Studio fork**: \`github.com/emilianojuandept/bmad-studio\`
+- **Claude Code**: agent execution runtime
+- Source documents per engagement (briefs, transcripts, public web data)
+
+## Operational Context
+
+- Local-first: each BB1 team member runs Studio + Claude Code on their laptop
+- Project repos live under \`~/Projects/<client-or-engagement>/bmad/\`
+- Outputs are gitignored by default; share via export or selective commit
+- No shared backend, no cloud hosting today
+
+## ADR Index
+
+| Decision | Where | Rationale |
+|---|---|---|
+| Use BMAD Studio for configuration | RUNBOOK | Visual management vs hand-editing YAML/TOML |
+| Fork Studio instead of depending on npm | github.com/emilianojuandept/bmad-studio | npm 1.1.0 broken against BMAD v6.7 |
 `
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
-import { Zap, Users, GitBranch, Edit, AlertTriangle } from 'lucide-react'
+import { Zap, Users, GitBranch, Edit, AlertTriangle, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { useCompiledSkills } from './use-skills.js'
+import { CreateSkillDialog } from './CreateSkillDialog.js'
 import { useDrift } from '../drift/use-drift.js'
 import { EmptyState } from '../../shared/EmptyState.js'
 import { EntityPageHeader } from '../../shared/EntityPageHeader.js'
@@ -16,6 +17,8 @@ export function SkillsPage() {
   const [search, setSearch] = useState('')
   const [activeModule, setActiveModule] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  // BB1 fork: expose skill creation from the UI (button was never wired upstream)
+  const [showCreate, setShowCreate] = useState(false)
 
   // Match drifted file paths to skill IDs by basename (e.g. "_bmad/agents/foo.md" → "foo")
   const driftedIds = useMemo(() => {
@@ -119,23 +122,40 @@ export function SkillsPage() {
         onSearchChange={setSearch}
         filteredCount={activeModule !== 'all' || search || typeFilter !== 'all' ? filtered.length : undefined}
         actions={
-          <div className="flex items-center gap-1">
-            {(['all', 'agent', 'workflow'] as TypeFilter[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTypeFilter(t)}
-                className={`px-3 py-1.5 text-sm rounded-md min-h-[36px] transition-colors capitalize ${
-                  typeFilter === t
-                    ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)] font-bold'
-                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
-                }`}
-              >
-                {t === 'all' ? 'All' : t === 'agent' ? 'Agent' : 'Workflow'}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              {(['all', 'agent', 'workflow'] as TypeFilter[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={`px-3 py-1.5 text-sm rounded-md min-h-[36px] transition-colors capitalize ${
+                    typeFilter === t
+                      ? 'bg-[var(--color-surface-raised)] text-[var(--color-text)] font-bold'
+                      : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  {t === 'all' ? 'All' : t === 'agent' ? 'Agent' : 'Workflow'}
+                </button>
+              ))}
+            </div>
+            {/* BB1 fork: New Skill button (CreateSkillDialog existed upstream but was never wired) */}
+            <button
+              onClick={() => setShowCreate(true)}
+              className="px-4 py-2 text-sm font-bold rounded-md bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors flex items-center gap-1.5"
+            >
+              <Plus size={14} />
+              New Skill
+            </button>
           </div>
         }
       />
+
+      {showCreate && (
+        <CreateSkillDialog
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false) }}
+        />
+      )}
 
       {driftCount > 0 && (
         <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-[var(--color-warning)]/10 border border-[var(--color-warning)]/30">

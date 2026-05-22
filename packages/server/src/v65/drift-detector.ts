@@ -79,6 +79,55 @@ function parseFilesManifest(projectRoot: string): FilesManifestRow[] | null {
 }
 
 // ---------------------------------------------------------------------------
+// BB1 fork: keep `files-manifest.csv` in sync with Studio's own writes
+// ---------------------------------------------------------------------------
+
+/**
+ * BB1 fork: when Studio itself modifies a file that's tracked by
+ * `files-manifest.csv` (e.g. `_config/manifest.yaml` after a module is created),
+ * recompute that file's SHA-256 and update its row in the manifest CSV. Without
+ * this, the drift detector keeps flagging the file as drifted forever, even
+ * though the change came from Studio's own action.
+ *
+ * Implementation note: we deliberately do NOT round-trip the CSV through
+ * Papa.parse + Papa.unparse. That re-serialization changes whitespace and
+ * trailing-newline conventions in subtle ways that the upstream parser
+ * (with `skipEmptyLines: true`) rejects as malformed. Instead, we do a
+ * byte-preserving line-level regex replacement on the hash field of the
+ * matching row, leaving every other byte of the file identical.
+ *
+ * `relPath` is the path relative to `_bmad/` (e.g. `_config/manifest.yaml`).
+ * Returns true if the row was found and updated, false otherwise.
+ */
+export function syncFilesManifestRow(projectRoot: string, relPath: string): boolean {
+  const csvPath = filesManifestPath(projectRoot)
+  if (!fs.existsSync(csvPath)) return false
+
+  const fileAbsolute = path.join(projectRoot, BMAD_DIR, relPath)
+  const newHash = hashFile(fileAbsolute)
+  if (!newHash) return false
+
+  const raw = fs.readFileSync(csvPath, 'utf-8')
+
+  // Find the row whose `path` column equals relPath, then rewrite the hash
+  // column (last quoted field on the line) without disturbing anything else.
+  // Each row format: "type","name","module","path","hash"
+  const escapedPath = relPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const rowRegex = new RegExp(
+    `^("[^"]*","[^"]*","[^"]*","${escapedPath}",")[0-9a-f]+(")$`,
+    'm',
+  )
+
+  if (!rowRegex.test(raw)) return false
+
+  const updated = raw.replace(rowRegex, `$1${newHash}$2`)
+  if (updated === raw) return false // hash already up-to-date
+
+  fs.writeFileSync(csvPath, updated, 'utf-8')
+  return true
+}
+
+// ---------------------------------------------------------------------------
 // BB1 fork: IDE-target fallback (BMAD v6.7 layout)
 // ---------------------------------------------------------------------------
 

@@ -9,6 +9,7 @@ import yaml from 'js-yaml'
 import { ValidationError, ConflictError, NotFoundError } from '../core/errors.js'
 import { detectVersion } from '../core/module-loader.js'
 import { loadManifestCached, invalidateCache } from '../v65/manifest-loader.js'
+import { syncFilesManifestRow } from '../v65/drift-detector.js'
 import {
   fetchAndCacheRegistryIndex,
   isRegistryCacheStale,
@@ -961,6 +962,11 @@ export async function modulesPlugin(app: FastifyInstance) {
     // Without this, the cache key (SHA-256 of files-manifest.csv) doesn't change
     // on module add, so loadManifestCached returns stale data forever.
     invalidateCache(app.fileStore.projectRoot)
+
+    // BB1 fork patch: Studio just modified `_config/manifest.yaml` (added the
+    // new module). Update its hash in `_config/files-manifest.csv` so the
+    // drift detector doesn't keep flagging it as drifted forever.
+    syncFilesManifestRow(app.fileStore.projectRoot, '_config/manifest.yaml')
 
     reply.status(201)
     return { ok: true, name }

@@ -8,8 +8,34 @@ import yaml from 'js-yaml'
 
 import { ValidationError, ConflictError, NotFoundError } from '../core/errors.js'
 import { detectVersion } from '../core/module-loader.js'
+import matter from 'gray-matter'
+
 import { loadManifestCached, invalidateCache } from '../v65/manifest-loader.js'
 import { syncFilesManifestRow } from '../v65/drift-detector.js'
+
+// BB1 fork: escape a value for CSV (RFC 4180). Wraps in quotes and escapes
+// embedded double quotes by doubling them.
+function csvEscape(value: string): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+// BB1 fork: append a row to skill-manifest.csv so the new entity shows up in
+// /api/skills/compiled (the v6.5+ index). Header is canonical:
+//   canonicalId,name,description,module,path
+function appendSkillManifestRow(
+  projectRoot: string,
+  row: { canonicalId: string; name: string; description: string; module: string; path: string },
+): void {
+  const csvPath = path.join(projectRoot, '_bmad', '_config', 'skill-manifest.csv')
+  if (!fs.existsSync(csvPath)) return
+  const existing = fs.readFileSync(csvPath, 'utf-8')
+  // Skip if a row with the same canonical id already exists (idempotent)
+  const idRegex = new RegExp(`^"${row.canonicalId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`, 'm')
+  if (idRegex.test(existing)) return
+  const line = [row.canonicalId, row.name, row.description, row.module, row.path].map(csvEscape).join(',')
+  const sep = existing.endsWith('\n') ? '' : '\n'
+  fs.appendFileSync(csvPath, sep + line + '\n', 'utf-8')
+}
 import {
   fetchAndCacheRegistryIndex,
   isRegistryCacheStale,
@@ -1341,6 +1367,29 @@ export async function modulesPlugin(app: FastifyInstance) {
 
     // Rebuild index
     app.fileStore.rebuild()
+
+    // BB1 fork patch: also register the new entity in skill-manifest.csv so
+    // /api/skills/compiled (the v6.5+ index used by the Skills page) sees it.
+    // Without this, the upload writes the file but the entity stays invisible
+    // in the UI's main Skills view.
+    if (entityType === 'skill' || entityType === 'workflow') {
+      const sanitized = entityName.replace(/\.md$/i, '')
+      const fm = matter(entityContent ?? '')
+      const description = String((fm.data as { description?: unknown })?.description ?? '')
+      const relPath = path.relative(app.fileStore.projectRoot, filePath)
+      appendSkillManifestRow(app.fileStore.projectRoot, {
+        canonicalId: sanitized,
+        name: sanitized,
+        description,
+        module: name,
+        path: relPath,
+      })
+      // Sync files-manifest.csv hash so the drift detector doesn't flag the
+      // skill-manifest.csv we just appended to.
+      syncFilesManifestRow(app.fileStore.projectRoot, '_config/skill-manifest.csv')
+      // Invalidate cache so the next GET /api/skills/compiled re-reads.
+      invalidateCache(app.fileStore.projectRoot)
+    }
 
     reply.status(201)
     return { ok: true, type: entityType, name: entityName }

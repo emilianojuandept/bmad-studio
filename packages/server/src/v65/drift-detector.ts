@@ -79,6 +79,39 @@ function parseFilesManifest(projectRoot: string): FilesManifestRow[] | null {
 }
 
 // ---------------------------------------------------------------------------
+// BB1 fork: IDE-target fallback (BMAD v6.7 layout)
+// ---------------------------------------------------------------------------
+
+/**
+ * BB1 fork patch: BMAD v6.7 installer deploys skill source files only to
+ * `.claude/skills/<skill-name>/...`, not to `_bmad/<module>/<phase>/<skill-name>/...`
+ * as the manifest expects. The drift detector therefore reports ~200+ false
+ * positives on a vanilla install.
+ *
+ * For each manifest path (e.g. `bmm/4-implementation/bmad-create-story/SKILL.md`),
+ * walk the segments and try to find a matching dir under `.claude/skills/`.
+ * Skill names like `bmad-create-story` are top-level dirs there, and the suffix
+ * (anything after the skill-name segment) preserves nested files like
+ * `templates/template.md`.
+ *
+ * Returns the alternative absolute path if a matching skill dir exists in
+ * `.claude/skills/`, or `null` if no fallback is plausible.
+ */
+function findIdeAlternativePath(relPath: string, projectRoot: string): string | null {
+  const segments = relPath.split('/')
+  const claudeSkillsRoot = path.join(projectRoot, '.claude', 'skills')
+  if (!fs.existsSync(claudeSkillsRoot)) return null
+  for (let i = 0; i < segments.length - 1; i++) {
+    const candidateSkillDir = path.join(claudeSkillsRoot, segments[i])
+    if (fs.existsSync(candidateSkillDir) && fs.statSync(candidateSkillDir).isDirectory()) {
+      const suffix = segments.slice(i + 1).join('/')
+      return path.join(candidateSkillDir, suffix)
+    }
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -100,7 +133,21 @@ export function scanDrift(projectRoot: string): DriftedFile[] | null {
 
     // paths in the manifest are relative to _bmad/ e.g. "bmm/skill.md" or "_config/manifest.yaml"
     const absolutePath = path.join(projectRoot, BMAD_DIR, relPath)
-    const actualHash = hashFile(absolutePath)
+    let actualHash = hashFile(absolutePath)
+
+    // BB1 fork: if the file isn't where the manifest expects, look at the IDE
+    // deploy target (`.claude/skills/<skill-name>/...`). On BMAD v6.7 the
+    // installer puts source files there, not under `_bmad/<mod>/...`, so the
+    // manifest's expected hash should be compared against the IDE copy.
+    if (actualHash !== expectedHash) {
+      const altPath = findIdeAlternativePath(relPath, projectRoot)
+      if (altPath) {
+        const altHash = hashFile(altPath)
+        if (altHash === expectedHash) {
+          continue // file present at IDE location with matching hash — not drifted
+        }
+      }
+    }
 
     if (actualHash !== expectedHash) {
       drifted.push({ relativePath: relPath, absolutePath, expectedHash, actualHash })

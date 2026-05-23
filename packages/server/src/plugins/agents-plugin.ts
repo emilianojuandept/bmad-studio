@@ -84,6 +84,18 @@ function appendSkillManifestRow(
   fs.appendFileSync(csvPath, sep + line + '\n', 'utf-8')
 }
 
+// BB1 fork: copy the agent .md to `.claude/skills/<slug>/SKILL.md` so Claude
+// Code can invoke it as `/<slug>` (which is what the UI's "HOW TO INVOKE"
+// section promises). Without this copy, the agent is configured but not
+// reachable from the IDE — the most common end-user failure mode.
+function deployAgentToClaudeSkills(projectRoot: string, slug: string, sourceMdPath: string): void {
+  const skillDir = path.join(projectRoot, '.claude', 'skills', slug)
+  const skillFile = path.join(skillDir, 'SKILL.md')
+  if (fs.existsSync(skillFile)) return // idempotent
+  fs.mkdirSync(skillDir, { recursive: true })
+  fs.copyFileSync(sourceMdPath, skillFile)
+}
+
 export async function agentsPlugin(app: FastifyInstance) {
   // Create a new custom agent
   app.post('/api/agents', async (request, reply) => {
@@ -155,6 +167,7 @@ export async function agentsPlugin(app: FastifyInstance) {
       icon: icon || undefined,
       description: role,
     })
+    deployAgentToClaudeSkills(app.fileStore.projectRoot, slug, filePath)
     invalidateCache(app.fileStore.projectRoot)
 
     reply.code(201)

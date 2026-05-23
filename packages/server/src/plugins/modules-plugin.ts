@@ -19,6 +19,17 @@ function csvEscape(value: string): string {
   return `"${String(value ?? '').replace(/"/g, '""')}"`
 }
 
+// BB1 fork: copy a skill's SKILL.md to `.claude/skills/<name>/SKILL.md` so
+// Claude Code can invoke it as `/<name>` (or load it when an agent dispatches
+// to it). Mirrors the agent-side deploy in agents-plugin.ts. Idempotent.
+function deploySkillToClaudeSkills(projectRoot: string, name: string, sourceMdPath: string): void {
+  const skillDir = path.join(projectRoot, '.claude', 'skills', name)
+  const skillFile = path.join(skillDir, 'SKILL.md')
+  if (fs.existsSync(skillFile)) return
+  fs.mkdirSync(skillDir, { recursive: true })
+  fs.copyFileSync(sourceMdPath, skillFile)
+}
+
 // BB1 fork: append a row to skill-manifest.csv so the new entity shows up in
 // /api/skills/compiled (the v6.5+ index). Header is canonical:
 //   canonicalId,name,description,module,path
@@ -1384,6 +1395,13 @@ export async function modulesPlugin(app: FastifyInstance) {
         module: name,
         path: relPath,
       })
+      // BB1 fork: also deploy the skill to `.claude/skills/<name>/SKILL.md` so
+      // Claude Code can invoke it directly or when an agent dispatches to it.
+      // Without this copy, the skill is configured in BMAD but not reachable
+      // from the IDE, breaking the agent → skill invocation chain.
+      if (entityType === 'skill') {
+        deploySkillToClaudeSkills(app.fileStore.projectRoot, sanitized, filePath)
+      }
       // Sync files-manifest.csv hash so the drift detector doesn't flag the
       // skill-manifest.csv we just appended to.
       syncFilesManifestRow(app.fileStore.projectRoot, '_config/skill-manifest.csv')

@@ -2,15 +2,16 @@
 # Start BMAD Studio.
 #
 # Usage:
-#   ./start.sh                  → Launch Studio in setup mode. Studio greets
-#                                 you and guides you through creating or
-#                                 pointing at a BMAD project.
-#   ./start.sh <project-dir>    → Launch Studio pointed at a specific project.
-#                                 Installs BMAD into the folder on first run.
+#   ./start.sh                  → Prompts you for a project name, creates it,
+#                                 installs BMAD, and launches Studio pointed
+#                                 at the new project.
+#   ./start.sh <project-dir>    → Launches Studio pointed at the given path.
+#                                 Installs BMAD into the folder if missing.
 #
 # Examples:
 #   ./start.sh
 #   ./start.sh ~/Projects/bb1/lufthansa-q1-2026
+#   ./start.sh lufthansa-q1-2026          # short form → ~/BMAD-projects/<name>
 
 set -e
 
@@ -32,21 +33,31 @@ if [ ! -f "$SCRIPT_DIR/packages/server/dist/index.js" ]; then
   (cd "$SCRIPT_DIR" && npm install && npm run build)
 fi
 
-cd "$SCRIPT_DIR"
-
+# Interactive prompt when no project was passed.
 if [ -z "$PROJECT" ]; then
-  # No project given. Launch Studio in its built-in setup mode and let the
-  # user create or point at a project from the UI.
-  echo "→ Starting BMAD Studio (setup mode)."
-  echo "  Open http://127.0.0.1:4040 (or 4041 if 4040 is taken) in your browser."
-  echo "  Press Ctrl+C to stop."
   echo ""
-  exec node packages/server/dist/index.js
+  echo "Where do you want your BMAD project?"
+  echo "  • Enter a name (e.g. 'lufthansa-q1') → saved under ~/BMAD-projects/<name>"
+  echo "  • Or a full path (e.g. '~/Documents/my-analysis')"
+  echo "  • Press Enter to accept the default: ~/BMAD-projects/default"
+  echo ""
+  read -r -p "> " USER_INPUT
+
+  if [ -z "$USER_INPUT" ]; then
+    PROJECT="$HOME/BMAD-projects/default"
+  elif [[ "$USER_INPUT" == /* ]]; then
+    PROJECT="$USER_INPUT"
+  elif [[ "$USER_INPUT" == "~"* ]]; then
+    PROJECT="${USER_INPUT/#\~/$HOME}"
+  else
+    PROJECT="$HOME/BMAD-projects/$USER_INPUT"
+  fi
+  echo ""
 fi
 
-# Project path given. Resolve to absolute path and create if missing.
-PROJECT="$(cd "$(dirname "$PROJECT")" 2>/dev/null && pwd)/$(basename "$PROJECT")"
+# Resolve to absolute path and create the directory if needed.
 mkdir -p "$PROJECT"
+PROJECT="$(cd "$PROJECT" && pwd)"
 
 # Install BMAD into the project if it has not been done yet.
 if [ ! -d "$PROJECT/_bmad" ]; then
@@ -56,10 +67,12 @@ if [ ! -d "$PROJECT/_bmad" ]; then
     --modules bmm \
     --tools claude-code \
     --yes
+  echo ""
 fi
 
 echo "→ Starting BMAD Studio pointed at $PROJECT"
 echo "  Open http://127.0.0.1:4040 (or 4041 if 4040 is taken) in your browser."
 echo "  Press Ctrl+C to stop."
 echo ""
+cd "$SCRIPT_DIR"
 exec node packages/server/dist/index.js --dir "$PROJECT"

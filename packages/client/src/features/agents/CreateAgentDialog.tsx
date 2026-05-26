@@ -89,7 +89,14 @@ export function CreateAgentDialog({ onClose, onCreated }: CreateAgentDialogProps
         const data = (await resp.json()) as { error?: { message?: string } }
         throw new Error(data.error?.message ?? 'Failed to create agent')
       }
-      await queryClient.invalidateQueries({ queryKey: ['agents'] })
+      // BB1 fork: invalidate every query the new agent touches so Agents,
+      // Skills, Modules, and Drift views all update without a manual refresh.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['agents'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['skills'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['modules'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['drift'], refetchType: 'all' }),
+      ])
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create agent')

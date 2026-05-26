@@ -127,7 +127,14 @@ export function CreateSkillDialog({ onClose, onCreated }: CreateSkillDialogProps
         const data = (await resp.json()) as { error?: { message?: string } }
         throw new Error(data.error?.message ?? 'Failed to create skill')
       }
-      await queryClient.invalidateQueries({ queryKey: ['skills'] })
+      // BB1 fork: invalidate every query that reflects the newly created skill,
+      // so the Skills, Modules, and Drift views all update without requiring
+      // a manual page refresh. Force a refetch on active queries.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['skills'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['modules'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['drift'], refetchType: 'all' }),
+      ])
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create skill')

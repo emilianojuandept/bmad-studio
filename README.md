@@ -4,6 +4,37 @@ Browser-based admin interface for the [BMAD](https://github.com/bmadcode/BMAD-ME
 
 BMAD Studio is the **configuration and visibility layer** for BMAD projects. It reads and writes BMAD's existing markdown and YAML files directly — no database, no hidden state. The IDE remains the execution environment; Studio helps you understand and manage the setup.
 
+---
+
+## About this fork (BB1)
+
+This is a friendlier-to-run fork of [`jwhiteside/bmad-studio`](https://github.com/jwhiteside/bmad-studio), maintained for the DEPT BB1 team. On top of the upstream, it adds:
+
+- **`./start.sh`** — one command that handles the whole launch path. Prompts for (or accepts) a project folder, installs BMAD into it if missing, builds Studio if missing, and launches it. Lists previously-created projects so you can pick by number.
+- **`examples/skills/`** — ready-to-import methodologies. Open Studio → Skills → New Skill → Import → paste the raw GitHub URL of any file under `examples/skills/`. Currently ships with the Commercial Journey Analysis methodology used by BB1.
+- **Patches** to the entity-creation flow so creating modules, skills, and agents from the UI updates the views without a manual refresh, and so newly-created agents/skills are auto-deployed to `.claude/skills/` so Claude Code can invoke them.
+- **BB1-flavored Project Context template** at Settings → Project Context → Start from template, with output conventions and anti-patterns aligned to BB1 work.
+
+### Quick start (this fork)
+
+```bash
+git clone https://github.com/emilianojuandept/bmad-studio.git
+cd bmad-studio
+npm install
+npm run build
+./start.sh
+```
+
+`./start.sh` walks you through picking or creating a project, then opens Studio at <http://127.0.0.1:4040>. Pass a path directly to skip the prompt:
+
+```bash
+./start.sh ~/Projects/your-project
+```
+
+Prerequisites: Node ≥20.12 (Node 22 recommended), git, npm.
+
+---
+
 ## Screenshots
 
 ### Overview Dashboard

@@ -601,6 +601,17 @@ export function ProjectContextEditorPage() {
       })
       if (resp.ok) {
         setSavedRaw(raw)
+        // BB1 fork: refetch serverDoc after save so the empty-state condition
+        // (serverDoc.raw === '' && serverDoc.filePath === null) becomes false.
+        // Without this, saving from the empty state would bounce the page back
+        // to "No project-context.md found" because serverDoc still reflects
+        // the pre-save state.
+        try {
+          const refreshed = await fetch('/api/project-context').then((r) => r.json())
+          setServerDoc(refreshed)
+        } catch {
+          /* non-fatal — manual refresh will recover */
+        }
         notify('success', 'Project context saved')
       } else {
         notify('error', 'Failed to save project context')
